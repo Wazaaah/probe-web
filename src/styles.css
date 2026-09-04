@@ -1,0 +1,408 @@
+/*
+ * Probe's design system, ported from the source design.
+ *
+ * One visual world: a monochrome light product whose single dark surface is the
+ * examination itself. Every colour is painted explicitly rather than inherited, and the
+ * accent is spent in exactly one place — the reviewer's choice.
+ */
+
+:root {
+  --ink: #000000;
+  --ink-900: #333333;
+  --ink-800: #545454;
+  --ink-700: #757575;
+  --ink-600: #afafaf;
+  --ink-500: #cbcbcb;
+  --rule: #e2e2e2;
+  --fill: #f6f6f6;
+  --surface: #ffffff;
+  --ground: #fafafa;
+  --session: #000000;
+  --dock: #141414;
+  --accent: #276ef1;
+  --ease: cubic-bezier(0.2, 0.8, 0.4, 1);
+  --phone: 420px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: 'Inter Tight', Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -- The shell ------------------------------------------------------------ */
+/* On a phone the app is the page: content above, a bar of tabs along the bottom.
+   On a desktop the same two elements become a rail down the side and a pane beside
+   it — one set of markup, laid out twice. */
+#root { display: flex; justify-content: center; min-height: 100dvh; }
+
+.frame {
+  width: 100%;
+  max-width: var(--phone);
+  min-height: 100dvh;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--surface);
+}
+
+/* A window the size of a phone: show the app as one. */
+@media (min-width: 520px) and (max-width: 899px) {
+  #root { padding: 24px 0; }
+  .frame {
+    min-height: min(880px, calc(100dvh - 48px));
+    height: min(880px, calc(100dvh - 48px));
+    border-radius: 28px;
+    box-shadow: 0 1px 4px hsla(0, 0%, 0%, 0.16), 0 24px 60px hsla(0, 0%, 0%, 0.1);
+  }
+}
+
+.scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.scroll::-webkit-scrollbar { width: 0; }
+.pad { padding: 8px 16px 16px; }
+
+/* -- Type ---------------------------------------------------------------- */
+.display { font-size: 36px; line-height: 52px; font-weight: 700; letter-spacing: -0.03em; margin: 0; text-wrap: balance; }
+.screen-title { font-size: 28px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.title { font-size: 22px; line-height: 32px; font-weight: 700; margin: 0; text-wrap: balance; }
+.card-title { font-size: 18px; line-height: 28px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.body { font-size: 16px; line-height: 24px; margin: 0; }
+.body-med { font-size: 16px; line-height: 24px; font-weight: 500; margin: 0; }
+.body-semi { font-size: 16px; line-height: 24px; font-weight: 600; margin: 0; }
+.meta { font-size: 14px; line-height: 20px; margin: 0; }
+.micro { font-size: 12px; line-height: 16px; margin: 0; }
+.micro-med { font-size: 12px; line-height: 16px; font-weight: 500; margin: 0; }
+.dim { color: var(--ink-700); }
+.dimmer { color: var(--ink-600); }
+.truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* -- Building blocks ------------------------------------------------------ */
+.row { display: flex; align-items: center; gap: 12px; }
+.stack { display: flex; flex-direction: column; }
+.grow { flex: 1; min-width: 0; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rule { height: 1px; background: var(--rule); border: 0; margin: 0; flex: none; }
+.wrap { flex-wrap: wrap; }
+
+.gap-4 { gap: 4px; } .gap-6 { gap: 6px; } .gap-8 { gap: 8px; } .gap-10 { gap: 10px; }
+.gap-12 { gap: 12px; } .gap-14 { gap: 14px; } .gap-16 { gap: 16px; } .gap-20 { gap: 20px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  transition: transform 0.15s var(--ease), background 0.15s var(--ease), border-color 0.2s var(--ease);
+}
+button.card:active { transform: scale(0.985); background: var(--fill); }
+.card.lifted { box-shadow: 0 1px 4px hsla(0, 0%, 0%, 0.16); }
+.card.chosen { border: 2px solid var(--ink); }
+.card.chosen-accent { border: 1.5px solid var(--accent); }
+.card.flat { padding: 0; gap: 0; }
+
+.tile { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--fill); display: grid; place-items: center; }
+.tile.solid { background: var(--ink); color: var(--surface); }
+.tile.lg { width: 48px; height: 48px; }
+
+.avatar {
+  width: 40px; height: 40px; flex: none; border-radius: 50%;
+  background: var(--fill); border: 1px solid var(--rule);
+  display: grid; place-items: center;
+  font-size: 14px; font-weight: 600; color: var(--ink-700);
+}
+.avatar.mid { width: 44px; height: 44px; }
+.avatar.big { width: 64px; height: 64px; font-size: 22px; }
+.avatar-wrap { position: relative; flex: none; display: block; }
+.avatar-wrap .unread {
+  position: absolute; top: -1px; right: -1px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--ink); box-shadow: 0 0 0 2px var(--surface);
+}
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--fill); color: var(--ink-800);
+  font-size: 12px; line-height: 16px; font-weight: 500;
+  white-space: nowrap;
+}
+.chip.solid { background: var(--ink); color: var(--surface); }
+.chip.outline { background: transparent; border: 1px solid var(--rule); color: var(--ink-700); }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.1s var(--ease) infinite; flex: none; }
+.dot.still { animation: none; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+.btn {
+  height: 56px; width: 100%;
+  border-radius: 8px; background: var(--ink); color: var(--surface);
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  font-size: 16px; font-weight: 500;
+  transition: transform 0.12s var(--ease), opacity 0.12s var(--ease);
+}
+.btn:active { transform: scale(0.97); opacity: 0.9; }
+.btn.quiet { background: var(--fill); color: var(--ink); }
+.btn.ghost { background: transparent; color: var(--ink-700); height: 44px; }
+.btn.small { height: 44px; font-size: 14px; padding: 0 16px; width: auto; }
+.btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+.dock { flex: none; padding: 8px 16px 12px; display: flex; gap: 10px; background: linear-gradient(to top, var(--surface) 62%, transparent); }
+
+.top { flex: none; height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 4px; background: var(--surface); }
+.top .t-title { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+.icon-btn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.icon-btn:active { opacity: 0.6; }
+.spacer-48 { width: 48px; flex: none; }
+
+/* -- Navigation ----------------------------------------------------------- */
+.nav { order: 2; flex: none; display: flex; background: var(--surface); border-top: 1px solid var(--rule); padding: 6px 4px 10px; }
+.nav.away { display: none; }
+.nav .brand { display: none; }
+.nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--ink-600); padding: 4px 0; }
+.nav button.on { color: var(--ink); }
+.nav .pill { padding: 3px 18px; border-radius: 999px; display: grid; place-items: center; transition: background 0.2s var(--ease); position: relative; }
+.nav button.on .pill { background: var(--fill); }
+.nav .label { font-size: 12px; font-weight: 500; }
+.nav .badge {
+  position: absolute; top: -4px; right: 8px;
+  background: var(--ink); color: var(--surface);
+  min-width: 17px; height: 17px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 4px;
+}
+
+.mark-sm { width: 30px; height: 30px; flex: none; border-radius: 9px; background: var(--ink); position: relative; }
+.mark-sm::after {
+  content: ''; position: absolute; inset: 0; margin: auto;
+  width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid var(--surface);
+}
+
+/* -- Understanding bars ---------------------------------------------------- */
+.bar { height: 8px; border-radius: 2px; background: #eeeeee; overflow: hidden; }
+.bar.is-gap { box-shadow: inset 0 0 0 1px var(--rule); }
+.bar > span { display: block; height: 100%; background: var(--ink); transition: width 0.4s var(--ease); }
+.bar > span.shaky { background: var(--ink-600); }
+.legend-swatch { width: 12px; height: 8px; border-radius: 2px; flex: none; }
+
+/* -- The examination -------------------------------------------------------- */
+.session { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--session); color: var(--surface); }
+.session .question { flex: none; font-size: clamp(22px, 3.8vh, 30px); line-height: 1.45; font-weight: 700; letter-spacing: -0.03em; padding: 8px 16px; transition: opacity 0.25s var(--ease); text-wrap: pretty; margin: 0; }
+.session .question.receded { opacity: 0.4; }
+
+.rail { flex: none; height: 64px; position: relative; }
+.rail .line { position: absolute; left: 16px; right: 16px; top: 16px; height: 1px; background: var(--ink-900); }
+.rail .nodes { position: absolute; left: 16px; right: 16px; top: 8px; height: 16px; display: flex; justify-content: space-between; align-items: center; }
+.rail .node { border-radius: 50%; background: var(--ink-800); width: 4px; height: 4px; flex: none; }
+.rail .node.done { width: 6px; height: 6px; background: var(--surface); }
+.rail .node.now { width: 8px; height: 8px; background: transparent; border: 1.5px solid var(--surface); }
+.rail .spur { position: absolute; top: 22px; display: flex; flex-direction: column; animation: spur 0.24s var(--ease) both; }
+.rail .spur .stem { width: 1px; height: 12px; background: var(--ink-900); margin-left: 3px; }
+.rail .ring { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--surface); flex: none; }
+@keyframes spur { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.recording { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); color: var(--ink); padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+/* Everything above the controls shares one scrolling column. On a phone it never
+   scrolls; on a short desktop window it does, rather than crushing the orb to nothing. */
+.session-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.session-body::-webkit-scrollbar { width: 0; }
+.orb-wrap { flex: 1 0 auto; min-height: 168px; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 4px 0; }
+.orb-wrap canvas { flex: none; min-height: 0; height: min(208px, 34vh); aspect-ratio: 1; cursor: pointer; }
+.orb-label { flex: none; font-size: 12px; color: var(--ink-600); }
+.heard { flex: none; height: clamp(48px, 9vh, 72px); display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden; }
+.heard .fade { position: absolute; inset: 0 0 auto 0; height: 26px; background: linear-gradient(var(--session), transparent); pointer-events: none; }
+.session-dock { flex: none; background: var(--dock); border-radius: 16px 16px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.round { width: 56px; height: 56px; border-radius: 50%; background: var(--ink-900); color: var(--surface); display: grid; place-items: center; }
+.round.on { background: var(--surface); color: var(--ink); }
+.hold { position: relative; height: 56px; border-radius: 8px; border: 1px solid var(--ink-800); overflow: hidden; display: grid; place-items: center; user-select: none; touch-action: none; }
+.hold .fill { position: absolute; inset: 0 auto 0 0; background: var(--surface); }
+.hold .lbl { position: relative; font-size: 16px; font-weight: 500; color: var(--surface); mix-blend-mode: difference; }
+.session .field { background: var(--session); color: var(--surface); border-color: var(--ink-800); }
+
+/* -- Onboarding -------------------------------------------------------------- */
+.splash { position: fixed; inset: 0; background: var(--ink); display: grid; place-items: center; z-index: 90; transition: opacity 0.4s var(--ease); }
+.splash.out { opacity: 0; pointer-events: none; }
+.mark { width: 84px; height: 84px; display: block; margin: 0 auto; }
+.mark circle { fill: none; stroke: #ffffff; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 220; stroke-dashoffset: 220; animation: draw 0.62s var(--ease) forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.splash .word { color: #ffffff; text-align: center; margin: 20px 0 0; opacity: 0; animation: fade 0.32s var(--ease) 0.6s forwards; }
+@keyframes fade { to { opacity: 1; } }
+
+.field { width: 100%; padding: 13px 14px; border-radius: 8px; border: 1px solid var(--rule); background: var(--surface); font-size: 16px; line-height: 24px; }
+.field:focus { border-color: var(--ink); outline: none; }
+textarea.field { min-height: 132px; resize: vertical; }
+.radio { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--rule); transition: border-color 0.2s var(--ease), background 0.2s var(--ease); }
+.radio.on { border-color: var(--ink); background: var(--ink); }
+.radio.accent { border-color: var(--accent); background: transparent; }
+.radio.accent > span { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: block; }
+
+.banner {
+  position: absolute; top: 8px; left: 10px; right: 10px; z-index: 40;
+  background: var(--surface); border-radius: 16px; padding: 13px 14px;
+  display: flex; align-items: center; gap: 11px; text-align: left;
+  box-shadow: 0 4px 16px hsla(0, 0%, 0%, 0.16);
+  animation: drop 0.25s var(--ease) both;
+}
+@keyframes drop { from { transform: translateY(-130%); } to { transform: none; } }
+
+.sheet-head { padding: 4px 16px 12px; }
+.sheet-scrim { position: absolute; inset: 0; background: hsla(0, 0%, 0%, 0.45); z-index: 30; display: flex; align-items: flex-end; }
+.sheet { width: 100%; height: 92%; background: var(--surface); border-radius: 16px 16px 0 0; display: flex; flex-direction: column; overflow: hidden; animation: up 0.25s var(--ease) both; }
+.sheet .grab { width: 38px; height: 4px; border-radius: 2px; background: var(--rule); margin: 10px auto 6px; flex: none; }
+@keyframes up { from { transform: translateY(100%); } to { transform: none; } }
+
+.node-row { display: flex; gap: 12px; }
+.node-row .spine { width: 26px; flex: none; display: flex; flex-direction: column; align-items: center; }
+.node-row .num { width: 26px; height: 26px; flex: none; border-radius: 50%; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.node-row .thread { width: 1.5px; flex: 1; background: var(--rule); }
+.probe { margin-left: 12px; padding-left: 14px; border-left: 1.5px dashed var(--rule); }
+.probe-body { background: var(--fill); border-radius: 8px; padding: 10px 11px; display: flex; gap: 8px; align-items: flex-start; }
+
+.dashed { border: 1px dashed var(--ink-600); border-radius: 8px; background: var(--fill); width: 100%; }
+.shimmer { background: linear-gradient(100deg, var(--fill) 20%, var(--surface) 42%, var(--fill) 64%); background-size: 360px 100%; animation: sweep 1.4s linear infinite; }
+@keyframes sweep { 0% { background-position: -240px 0; } 100% { background-position: 280px 0; } }
+.notice { background: var(--fill); border-radius: 8px; padding: 13px; }
+.track { height: 3px; border-radius: 2px; background: var(--fill); overflow: hidden; }
+.track > span { display: block; height: 100%; background: var(--ink); transition: width 0.36s var(--ease); }
+
+
+/* -- Wide windows ---------------------------------------------------------- */
+/* Past this point it stops pretending to be a phone: the tab bar becomes a rail,
+   the pane fills the window, and the text keeps a column it can be read in. */
+@media (min-width: 900px) {
+  #root { padding: 0; }
+
+  .frame {
+    max-width: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+    flex-direction: row;
+    background: var(--ground);
+  }
+
+  .pane { border-left: 1px solid var(--rule); }
+
+  .nav {
+    order: 0;
+    flex: none;
+    width: 264px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 22px 14px;
+    border-top: 0;
+    background: var(--ground);
+  }
+  /* A rail does not go away when a detail view opens — only a bottom bar does. */
+  .nav.away { display: flex; }
+  .nav .brand { display: flex; align-items: center; gap: 11px; padding: 6px 10px 24px; min-width: 0; }
+  .nav button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 12px; border-radius: 10px; }
+  .nav button:hover { background: var(--fill); }
+  .nav button.on { background: var(--fill); }
+  .nav .pill, .nav button.on .pill { padding: 0; background: none; position: static; }
+  .nav .label { font-size: 15px; }
+  /* In a row the count belongs at the end of the row, not stuck to the icon. */
+  .nav button { position: relative; }
+  .nav .badge { top: 50%; right: 12px; transform: translateY(-50%); }
+
+  /* One column, centred in whatever width the window happens to be. */
+  .pad, .dock, .top { padding-left: max(36px, calc((100% - 820px) / 2)); padding-right: max(36px, calc((100% - 820px) / 2)); }
+  .pad { padding-top: 26px; padding-bottom: 56px; }
+
+  .top { height: 68px; border-bottom-color: var(--rule); }
+  .top .t-title { flex: 1; font-size: 22px; text-align: left; }
+  .top > .spacer-48:first-child { display: none; }
+  .top .icon-btn:first-child { margin-left: -12px; }
+
+  .dock {
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: 14px;
+    padding-bottom: 22px;
+    background: var(--surface);
+    border-top: 1px solid var(--rule);
+  }
+  .dock .btn { width: auto; min-width: 190px; padding: 0 26px; }
+
+  /* A button inside a card is one action, not a banner across the column. */
+  .pane .card .btn:not(.small) { width: auto; min-width: 210px; padding: 0 26px; align-self: flex-start; }
+  .pane .card.dashed { align-self: stretch; }
+
+  .screen-title { font-size: 32px; line-height: 44px; }
+
+  /* Cards that read as a set get a set's worth of room. */
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
+
+  /* Signing in is one decision, so it stays a card rather than filling the window. */
+  .frame.solo { align-items: center; justify-content: center; }
+  .frame.solo > .pane {
+    flex: none;
+    width: min(560px, 100%);
+    max-height: calc(100dvh - 80px);
+    border: 1px solid var(--rule);
+    border-radius: 20px;
+    box-shadow: 0 1px 4px hsla(0, 0%, 0%, 0.1), 0 20px 50px hsla(0, 0%, 0%, 0.08);
+    overflow: hidden;
+  }
+  .frame.solo > .pane .pad, .frame.solo > .pane .dock { padding-left: 32px; padding-right: 32px; }
+  .frame.solo > .pane .dock { border-top: 0; justify-content: stretch; }
+  .frame.solo > .pane .dock .btn { width: 100%; }
+
+  /* The examination is the only screen that takes the whole window as it is. */
+  .frame.bare { background: var(--session); }
+  .session > * { width: 100%; max-width: 960px; margin-inline: auto; }
+  .session .question { font-size: clamp(28px, 2.4vw, 42px); padding: 10px 24px; }
+  /* There is room here, so nothing scrolls: the orb takes what is left and shrinks
+     squarely when the window is short. */
+  .session-body { overflow: hidden; }
+  .orb-wrap { flex: 1 1 auto; min-height: 0; }
+  /* min-height:auto would let a replaced element refuse to shrink; it must not. */
+  .orb-wrap canvas { flex: 0 1 auto; min-height: 0; height: min(280px, 34vh); }
+  .session-dock { max-width: 620px; margin: 0 auto 20px; padding: 14px; border-radius: 20px; }
+
+  /* A bottom sheet on a phone is a dialog on a desktop. */
+  /* A dialog dims the whole window, rail included — not just the pane it opened in. */
+  .sheet-scrim { position: fixed; align-items: center; justify-content: center; padding: 36px; }
+  .sheet-head { padding: 18px 22px 16px; }
+  .sheet { width: min(760px, 100%); height: min(84%, 780px); border-radius: 16px; animation-name: pop; }
+  .sheet .grab { display: none; }
+  @keyframes pop { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+
+  .banner { left: auto; right: 24px; top: 20px; width: 400px; }
+}
