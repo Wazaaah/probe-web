@@ -206,7 +206,7 @@ button.card:active { transform: scale(0.985); background: var(--fill); }
   font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 4px;
 }
 
-.mark-sm { width: 30px; height: 30px; flex: none; border-radius: 9px; background: var(--ink); position: relative; }
+.mark-sm { display: block; width: 30px; height: 30px; flex: none; border-radius: 9px; background: var(--ink); position: relative; }
 .mark-sm::after {
   content: ''; position: absolute; inset: 0; margin: auto;
   width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid var(--surface);
