@@ -7,6 +7,11 @@ from, and reads the transcript afterwards. You never see the angles they rejecte
 
 Two browsers, two roles, one pairing code. No server of ours anywhere in it.
 
+**Live: https://wazaaah.github.io/probe-web/**
+
+Open it on two devices, pick a different side on each, and give both the same pairing
+code. Whatever one does shows up on the other without a refresh.
+
 ## Running it
 
 ```bash
@@ -47,8 +52,24 @@ It is enough to demonstrate the flow and not enough to examine anyone.
 
 ## Serving it
 
-`npm run build` produces `dist/` — plain static files with relative paths, so it drops onto
-any static host, including a subdirectory.
+```bash
+npm run deploy     # build, then force-push dist/ to the gh-pages branch
+```
+
+`npm run build` alone produces `dist/` — plain static files with relative paths, so it
+drops onto any static host, including a subdirectory.
+
+`deploy/pages.yml` is the same thing as a GitHub Actions workflow, which is the better
+mechanism: every push to `main` builds and publishes, and nothing has to be run locally.
+It is parked in `deploy/` because the token that created this repository has no `workflow`
+scope. To switch to it:
+
+```bash
+gh auth refresh -s workflow
+mkdir -p .github/workflows && git mv deploy/pages.yml .github/workflows/pages.yml
+git commit -am "Deploy from Actions" && git push
+gh api -X PUT repos/OWNER/REPO/pages -f build_type=workflow
+```
 
 **It must be served over HTTPS.** `SpeechRecognition` and the microphone only work in a
 secure context, so `http://192.168.x.x` on a phone will load the app and then refuse to
