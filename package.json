@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vitest run && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && node deploy/publish.mjs"
   },
   "dependencies": {
     "pdfjs-dist": "^4.10.38",
