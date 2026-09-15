@@ -34,7 +34,7 @@ const PREPARATIONS: { id: Preparation; label: string; hint: string }[] = [
   { id: 'unread', label: 'Not at all', hint: 'Going in cold, on purpose' },
 ]
 
-export function Trial({ onLeave }: { onLeave: () => void }) {
+export function Trial({ onLeave, onReview }: { onLeave: () => void; onReview: () => void }) {
   const existing = trialSetup()
   const [participant, setParticipant] = useState(existing?.participant ?? '')
   const [preparation, setPreparation] = useState<Preparation>(existing?.preparation ?? 'unsaid')
@@ -191,8 +191,22 @@ export function Trial({ onLeave }: { onLeave: () => void }) {
               </div>
             )}
 
-            <div className="row gap-8" style={{ marginTop: 22 }}>
-              <button className="btn" onClick={() => exportSessions(sessions)}>
+            <div className="stack gap-4" style={{ marginTop: 24 }}>
+              <p className="body-med">Read them back blind</p>
+              <p className="meta dim">
+                Shuffled, with the codes, self-reports and scores hidden, so your own read of
+                each transcript counts as an independent judgment. Everything is revealed side
+                by side at the end.
+              </p>
+            </div>
+            <button className="btn" onClick={onReview} style={{ marginTop: 10 }}>
+              Start blind review
+            </button>
+
+            <div className="rule" style={{ margin: '24px 0 20px' }} />
+
+            <div className="row gap-8">
+              <button className="btn quiet" onClick={() => exportSessions(sessions)}>
                 Export JSON
               </button>
               <button

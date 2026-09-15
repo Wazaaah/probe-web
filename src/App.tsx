@@ -3,6 +3,7 @@ import { RoleChooser, Splash } from './screens/Onboarding'
 import { Learner } from './screens/learner/Learner'
 import { Reviewer } from './screens/reviewer/Reviewer'
 import { Trial } from './screens/Trial'
+import { Review } from './screens/Review'
 import { useProbe } from './lib/store'
 
 /**
@@ -28,20 +29,24 @@ export function App() {
     }
   }, [])
 
+  const go = (next: string) => {
+    window.location.hash = next
+    setHash(next)
+  }
+
   useEffect(() => {
     const onHash = () => setHash(window.location.hash)
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  if (hash === '#review') {
+    return <Review onLeave={() => go('#trial')} />
+  }
+
   if (hash === '#trial') {
     return (
-      <Trial
-        onLeave={() => {
-          window.location.hash = ''
-          setHash('')
-        }}
-      />
+      <Trial onLeave={() => go('')} onReview={() => go('#review')} />
     )
   }
 

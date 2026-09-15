@@ -436,3 +436,168 @@ export function summarise(sessions = loadSessions()): string {
   const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i])).join('  ')
   return [line(head), widths.map((w) => '-'.repeat(w)).join('  '), ...rows.map(line)].join('\n')
 }
+
+/* -- blind review -------------------------------------------------------- */
+
+/**
+ * Your own read of a transcript, given before you know whose it is.
+ *
+ * This is the column the trial exists to produce. Self-report is noisy — people misjudge
+ * how well they prepared — and the app's score is the thing under test, so neither can
+ * serve as truth. A competent examiner reading the transcript is the benchmark, and it
+ * only counts as one if it is given blind: knowing that P2 did not do the reading means
+ * seeing bluffing whether or not it is there.
+ */
+export interface Review {
+  /** The session's startedAt, which is its identity. */
+  at: number
+  /** 1 = understands none of it, 5 = understands it well. */
+  rating: number
+  note: string
+}
+
+const REVIEWS = 'probe.trial.reviews'
+
+export function loadReviews(): Review[] {
+  try {
+    const raw = localStorage.getItem(REVIEWS)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? (parsed as Review[]) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveReview(review: Review): void {
+  const all = loadReviews().filter((r) => r.at !== review.at)
+  try {
+    localStorage.setItem(REVIEWS, JSON.stringify([...all, review]))
+  } catch {
+    /* private browsing: the rating is lost, the transcript is not */
+  }
+}
+
+export function clearReviews(): void {
+  try {
+    localStorage.removeItem(REVIEWS)
+  } catch {
+    /* nothing to do */
+  }
+}
+
+/**
+ * A stable shuffle.
+ *
+ * Stable because a review that re-orders itself on every reload is one you cannot put
+ * down and come back to, and because the order must not depend on when a session was
+ * recorded — reading them in the order they were run reintroduces exactly the knowledge
+ * the blinding is there to remove.
+ */
+export function blindOrder(sessions: TrialSession[]): TrialSession[] {
+  const seed = sessions.reduce((a, s) => a + s.startedAt, sessions.length)
+  return [...sessions]
+    .map((s) => {
+      // A cheap deterministic hash: same set in, same order out, unrelated to recording time.
+      const x = Math.sin(s.startedAt % 100000 + seed) * 10000
+      return { s, key: x - Math.floor(x) }
+    })
+    .sort((a, b) => a.key - b.key)
+    .map((p) => p.s)
+}
+
+/** The transcript as prose, with everything identifying stripped out. */
+export function blindTranscript(session: TrialSession): string {
+  return session.turns
+    .map((t, i) => `${t.probe ? 'Follow-up' : `Question ${i + 1}`}: ${t.question}\n\nAnswer: ${t.said}`)
+    .join('\n\n— — —\n\n')
+}
+
+export interface Comparison {
+  participant: string
+  preparation: Preparation
+  /** Your blind rating, rescaled to 0-100 so it sits beside the app's score. */
+  blind: number | null
+  rating: number | null
+  app: number | null
+  gap: number | null
+  note: string
+}
+
+/** Line your judgment up against the app's, once every transcript has been rated. */
+export function compare(sessions = loadSessions(), reviews = loadReviews()): Comparison[] {
+  return sessions.map((s) => {
+    const review = reviews.find((r) => r.at === s.startedAt) ?? null
+    // 1-5 maps onto 0,25,50,75,100 so the two columns are read on one scale.
+    const blind = review ? (review.rating - 1) * 25 : null
+    return {
+      participant: s.participant,
+      preparation: s.preparation,
+      blind,
+      rating: review?.rating ?? null,
+      app: s.score,
+      gap: blind != null && s.score != null ? s.score - blind : null,
+      note: review?.note ?? '',
+    }
+  })
+}
+
+/** The comparison as a table, for reading on the spot. */
+export function comparisonTable(rows: Comparison[]): string {
+  if (!rows.length) return 'Nothing to compare yet.'
+  const head = ['who', 'said they did', 'you (1-5)', 'you /100', 'app /100', 'app minus you']
+  const body = rows.map((r) => [
+    r.participant,
+    r.preparation,
+    r.rating == null ? '—' : String(r.rating),
+    r.blind == null ? '—' : String(r.blind),
+    r.app == null ? '—' : String(r.app),
+    r.gap == null ? '—' : (r.gap > 0 ? `+${r.gap}` : String(r.gap)),
+  ])
+  const widths = head.map((h, i) => Math.max(h.length, ...body.map((b) => b[i].length)))
+  const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i])).join('  ')
+  return [line(head), widths.map((w) => '-'.repeat(w)).join('  '), ...body.map(line)].join('\n')
+}
+
+/**
+ * How closely the app tracked you, as Spearman's rank correlation.
+ *
+ * Ranks rather than raw scores because the two scales are not commensurable — what
+ * matters is whether the app put the same people in the same order you did, not whether
+ * it agreed about the numbers. Returns null below three rated transcripts, where a
+ * correlation would be theatre.
+ */
+export function agreement(rows: Comparison[]): number | null {
+  const pairs = rows.filter((r) => r.blind != null && r.app != null) as (Comparison & { blind: number; app: number })[]
+  if (pairs.length < 3) return null
+
+  const rank = (values: number[]): number[] => {
+    const order = values.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v)
+    const out = new Array<number>(values.length)
+    let at = 0
+    while (at < order.length) {
+      // Ties share the average of the ranks they span, or the correlation is distorted.
+      let end = at
+      while (end + 1 < order.length && order[end + 1].v === order[at].v) end += 1
+      const shared = (at + end) / 2 + 1
+      for (let k = at; k <= end; k += 1) out[order[k].i] = shared
+      at = end + 1
+    }
+    return out
+  }
+
+  const a = rank(pairs.map((p) => p.blind))
+  const b = rank(pairs.map((p) => p.app))
+  const n = pairs.length
+  const mean = (xs: number[]) => xs.reduce((x, y) => x + y, 0) / xs.length
+  const ma = mean(a)
+  const mb = mean(b)
+  let num = 0
+  let da = 0
+  let db = 0
+  for (let i = 0; i < n; i += 1) {
+    num += (a[i] - ma) * (b[i] - mb)
+    da += (a[i] - ma) ** 2
+    db += (b[i] - mb) ** 2
+  }
+  return da && db ? num / Math.sqrt(da * db) : null
+}
