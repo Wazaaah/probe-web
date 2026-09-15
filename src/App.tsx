@@ -55,7 +55,7 @@ export function App() {
   }
 
   if (hash === '#review') {
-    return <Review onLeave={() => go('#trial')} />
+    return <Review onLeave={() => go('#trial')} brain={store.brain} />
   }
 
   if (hash === '#trial') {

@@ -1,4 +1,18 @@
 import type { Answer, PathNode, QuestionPath, Summary, Verdict } from '../data/types'
+import {
+  CHECKER,
+  EXTRACTOR,
+  checkPrompt,
+  evidenceFor,
+  extractPrompt,
+  readClaims,
+  readVerdicts,
+  recycles,
+  scoreClaims,
+  windowsOf,
+  type Grade,
+} from './claims'
+import { COMPARER, comparePrompt, readWinner } from './ranking'
 
 /**
  * Whoever judges the answers.
@@ -331,6 +345,17 @@ async function ask(config: BrainConfig, system: string, user: string, maxTokens:
 export interface Brain {
   judge(path: QuestionPath, node: PathNode, said: string, probed: boolean): Promise<Verdict | null>
   summarise(path: QuestionPath, answers: Answer[]): Promise<Summary | null>
+  /**
+   * Score by counting checked claims rather than by asking for a verdict.
+   * Null when there is no source to check against, which is most ordinary use.
+   */
+  grade(answers: Answer[], source: string, work: string): Promise<Grade | null>
+  /**
+   * Which of two transcripts shows more evidence of having read the source.
+   * Returns null when the reply could not be read, so the caller can record a tie rather
+   * than invent a winner.
+   */
+  compare(left: string, right: string): Promise<'A' | 'B' | null>
   buildPaths(name: string, text: string, opts?: { kind?: DocumentKind; source?: Source }): Promise<QuestionPath[] | null>
   check(): Promise<string>
 }
@@ -356,6 +381,32 @@ export function makeBrain(config: BrainConfig): Brain | null {
         coverage: Math.max(0, Math.min(100, Number(json.coverage) || 0)),
         followUp: typeof json.followUp === 'string' ? json.followUp : '',
       }
+    },
+
+    async compare(left, right) {
+      const json = await quiet(COMPARER, comparePrompt(left, right), 700)
+      return readWinner(json?.winner)
+    },
+
+    async grade(answers, source, work) {
+      if (!answers.length || !source.trim()) return null
+
+      const extracted = await quiet(EXTRACTOR, extractPrompt(answers), 1600)
+      const claims = readClaims(extracted?.claims)
+      if (!claims.length) return scoreClaims([])
+
+      // Retrieval happens here, in the tab. Each claim is checked against the passage
+      // that bears on it, not against the whole paper — a model asked to find one
+      // sentence in six thousand words tends to lose it.
+      const windows = windowsOf(source)
+      const items = claims.map((claim) => ({ claim, evidence: evidenceFor(claim, windows) }))
+
+      const checked = await quiet(CHECKER, checkPrompt(items), 2000)
+      const verdicts = readVerdicts(checked?.verdicts, claims.length)
+
+      return scoreClaims(
+        claims.map((text, i) => ({ text, support: verdicts[i], recycled: recycles(text, work) })),
+      )
     },
 
     async summarise(path, answers) {

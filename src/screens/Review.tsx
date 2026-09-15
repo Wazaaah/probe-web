@@ -1,4 +1,15 @@
 import { useMemo, useState } from 'react'
+import type { Brain } from '../lib/brain'
+import {
+  agreementWith,
+  boutCount,
+  pairsOf,
+  rank,
+  settle,
+  transcriptOf,
+  type Bout,
+  type Ranked,
+} from '../lib/ranking'
 import { TopBar } from '../components/ui'
 import {
   agreement,
@@ -24,7 +35,7 @@ import {
  * So: shuffled, unlabelled, one at a time, no score shown, no way back to change an
  * earlier answer once seen. Then everything is revealed at once.
  */
-export function Review({ onLeave }: { onLeave: () => void }) {
+export function Review({ onLeave, brain }: { onLeave: () => void; brain: Brain | null }) {
   const sessions = useMemo(() => loadSessions(), [])
   const ordered = useMemo(() => blindOrder(sessions), [sessions])
 
@@ -36,6 +47,35 @@ export function Review({ onLeave }: { onLeave: () => void }) {
   })
   const [rating, setRating] = useState(0)
   const [note, setNote] = useState('')
+  const [table, setTable] = useState<Ranked[] | null>(null)
+  const [running, setRunning] = useState(false)
+  const [ties, setTies] = useState(0)
+
+  /**
+   * Rank the field by comparing transcripts to each other rather than scoring them.
+   *
+   * Every pair is asked twice with the transcripts swapped. A judge shown the same two
+   * answers in the other order does not always say the same thing, and taking the first
+   * reply would bake that position bias into the order. Pairs that contradict themselves
+   * are counted as ties, because that is what "A beats B and B beats A" actually means.
+   */
+  const tournament = async () => {
+    if (!brain || sessions.length < 2) return
+    setRunning(true)
+    const bouts: Bout[] = []
+    for (const [x, y] of pairsOf(sessions)) {
+      const left = transcriptOf(x)
+      const right = transcriptOf(y)
+      const [first, second] = await Promise.all([
+        brain.compare(left, right).catch(() => null),
+        brain.compare(right, left).catch(() => null),
+      ])
+      bouts.push(settle(x.participant, y.participant, first, second))
+    }
+    setTies(bouts.filter((b) => !b.winner).length)
+    setTable(rank(sessions.map((s) => s.participant), bouts))
+    setRunning(false)
+  }
 
   const current = ordered[at] ?? null
   const finished = at >= ordered.length
@@ -122,6 +162,73 @@ export function Review({ onLeave }: { onLeave: () => void }) {
             </div>
           )}
 
+          <div className="rule" style={{ margin: '28px 0 22px' }} />
+
+          <div className="stack gap-4">
+            <p className="body-med">Or let it rank them by comparison</p>
+            <p className="meta dim">
+              Instead of scoring each transcript alone, it puts two side by side and picks
+              the one that shows more evidence of reading. Every pair is asked twice, with
+              the order swapped. In testing this was the most reliable of the judges.
+            </p>
+          </div>
+
+          {!table && (
+            <button
+              className="btn"
+              onClick={() => void tournament()}
+              disabled={!brain || sessions.length < 2 || running}
+              style={{ marginTop: 12 }}
+            >
+              {running ? 'Comparing…' : `Rank them (${boutCount(sessions.length)} comparisons)`}
+            </button>
+          )}
+          {!brain && (
+            <p className="meta dim" style={{ marginTop: 8 }}>
+              Needs a model — set one under Examiner settings.
+            </p>
+          )}
+
+          {table && (
+            <>
+              <div style={{ overflowX: 'auto', marginTop: 14 }}>
+                <pre
+                  className="micro"
+                  style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    lineHeight: 1.7,
+                    margin: 0,
+                    whiteSpace: 'pre',
+                  }}
+                >
+                  {rankingTable(table, rows)}
+                </pre>
+              </div>
+              {(() => {
+                const spearman = agreementWith(
+                  table.map((t) => t.participant),
+                  new Map(
+                    rows
+                      .filter((r) => r.rating != null)
+                      .slice()
+                      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+                      .map((r, i) => [r.participant, i + 1] as [string, number]),
+                  ),
+                )
+                return (
+                  <div className="notice row" style={{ marginTop: 14 }}>
+                    <span className="meta">
+                      {spearman == null
+                        ? 'Rate at least three transcripts to compare the two orderings.'
+                        : `Its order against yours: Spearman ${spearman.toFixed(2)}.`}
+                      {ties > 0 && ` ${ties} pair${ties === 1 ? '' : 's'} it could not separate — it said both ways round.`}
+                    </span>
+                  </div>
+                )
+              })()}
+            </>
+          )}
+
           <div className="row gap-8" style={{ marginTop: 24 }}>
             <button
               className="btn quiet"
@@ -129,6 +236,7 @@ export function Review({ onLeave }: { onLeave: () => void }) {
                 if (window.confirm('Clear your ratings and read them all again from scratch?')) {
                   clearReviews()
                   setReviews([])
+                  setTable(null)
                   setAt(0)
                 }
               }}
@@ -205,6 +313,27 @@ export function Review({ onLeave }: { onLeave: () => void }) {
       </div>
     </div>
   )
+}
+
+/** The tournament result beside the blind ratings, for reading on the spot. */
+function rankingTable(table: Ranked[], rows: { participant: string; rating: number | null; preparation: string; authorship: string }[]): string {
+  const head = ['rank', 'who', 'won', 'tied', 'lost', 'you (1-5)', 'read it', 'wrote it']
+  const body = table.map((t, i) => {
+    const row = rows.find((r) => r.participant === t.participant)
+    return [
+      String(i + 1),
+      t.participant,
+      String(t.wins),
+      String(t.ties),
+      String(t.losses),
+      row?.rating == null ? '—' : String(row.rating),
+      row?.preparation ?? '—',
+      row?.authorship ?? '—',
+    ]
+  })
+  const widths = head.map((h, i) => Math.max(h.length, ...body.map((b) => b[i].length)))
+  const line = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i])).join('  ')
+  return [line(head), widths.map((w) => '-'.repeat(w)).join('  '), ...body.map(line)].join('\n')
 }
 
 /** Plain words for a correlation, because a number alone tells you nothing at this size. */

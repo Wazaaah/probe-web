@@ -4,7 +4,7 @@ import { Session } from './Session'
 import { Trial } from './Trial'
 import { Review } from './Review'
 import { Upload } from './learner/Upload'
-import { readingText, recorder, rememberSource, rememberWork } from '../lib/trial'
+import { readingText, recorder, rememberSource, rememberWork, workingText } from '../lib/trial'
 import type { Examiner } from '../lib/examiner'
 import type { ProbeStore } from '../lib/store'
 import type { QuestionPath } from '../data/types'
@@ -101,8 +101,15 @@ export function TrialApp({ store }: { store: ProbeStore }) {
   const finish = async (examiner: Examiner) => {
     const local = examiner.score()
     setStage('recorded')
-    const summary = path && store.brain ? await store.brain.summarise(path, examiner.answers).catch(() => null) : null
-    recorder.finish(examiner.answers, summary?.score ?? local)
+
+    // Both scores are taken. The holistic one is what ships; the claim count is what the
+    // testing says should replace it. Recording them side by side is the only way to find
+    // out which tracks a human reading of the same transcript.
+    const [summary, grade] = await Promise.all([
+      path && store.brain ? store.brain.summarise(path, examiner.answers).catch(() => null) : null,
+      store.brain ? store.brain.grade(examiner.answers, readingText(), workingText()).catch(() => null) : null,
+    ])
+    recorder.finish(examiner.answers, summary?.score ?? local, grade)
   }
 
   if (stage === 'brain')
@@ -134,7 +141,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
       />
     )
 
-  if (stage === 'review') return <Review onLeave={() => setStage('console')} />
+  if (stage === 'review') return <Review onLeave={() => setStage('console')} brain={store.brain} />
 
   if (stage === 'building')
     return (

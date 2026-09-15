@@ -25,6 +25,7 @@
  */
 
 import type { Answer } from '../data/types'
+import type { Grade } from './claims'
 
 export interface TrialTurn {
   /** Which question in the script this belongs to, so probes group with their parent. */
@@ -68,6 +69,9 @@ export interface TrialSession {
   turns: TrialTurn[]
   answers: Answer[]
   score: number | null
+  /** The claim-counting score, kept beside the holistic one rather than replacing it —
+   *  the point of the trial is to see which tracks a human read of the same transcript. */
+  grade: Grade | null
   signals: TrialSignals | null
   /** Anything the participant wanted to say afterwards. */
   note: string
@@ -377,7 +381,7 @@ class Recorder {
     this.firstWordAt = 0
   }
 
-  finish(answers: Answer[], score: number | null): TrialSession | null {
+  finish(answers: Answer[], score: number | null, grade: Grade | null = null): TrialSession | null {
     const setup = readSetup()
     if (!setup?.participant || !this.turns.length) return null
     const session: TrialSession = {
@@ -390,6 +394,7 @@ class Recorder {
       turns: this.turns,
       answers,
       score,
+      grade,
       signals: signalsFor(this.turns, this.document, this.work),
       note: '',
     }
@@ -470,12 +475,13 @@ export function exportSessions(sessions = loadSessions()): void {
 /** A compact table for reading on the spot, before anyone opens the JSON. */
 export function summarise(sessions = loadSessions()): string {
   if (!sessions.length) return 'No sessions recorded yet.'
-  const head = ['participant', 'prep', 'wrote', 'score', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
+  const head = ['participant', 'prep', 'wrote', 'score', 'claims', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
   const rows = sessions.map((s) => [
     s.participant,
     s.preparation,
     s.authorship ?? 'unsaid',
     s.score == null ? '—' : String(s.score),
+    s.grade == null ? '—' : `${s.grade.score}`,
     String(s.signals?.words ?? 0),
     (s.signals?.hedge ?? 0).toFixed(2),
     (s.signals?.repair ?? 0).toFixed(2),
