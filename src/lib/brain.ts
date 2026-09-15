@@ -42,7 +42,7 @@ export const PROVIDERS: ProviderInfo[] = [
     label: 'Gemini',
     blurb: 'Free from Google AI Studio, no card. A Gemini Pro subscription does not cover this — the API is separate.',
     free: true,
-    defaultModel: 'gemini-3.5-flash',
+    defaultModel: 'gemini-2.5-flash',
     keysUrl: 'aistudio.google.com/apikey',
   },
   {
@@ -93,6 +93,39 @@ Score what they actually demonstrated. Be honest — a reviewer is deciding whet
 Reply with JSON only: {"score": 0-100, "verdict": "one sentence to the learner", "concepts": [{"label": "", "state": "solid|shaky|gap", "percent": 0-100}], "moment": {"concept": "", "quote": "their own words", "why": ""}}`
 }
 
+/**
+ * Fit a long document into a prompt without examining someone on only its opening.
+ *
+ * The old code took `text.slice(0, 20000)`, which for a real dissertation is roughly the
+ * first tenth. Every question then came from the introduction, and the student was never
+ * asked about the work itself — the failure was invisible because the questions still
+ * looked plausible.
+ *
+ * Sampling evenly across the whole document is not as good as retrieving the passages
+ * that matter, which is where this should end up. It is strictly better than reading only
+ * the front, it costs the same tokens, and the elisions are marked so the model knows it
+ * is seeing a document rather than the whole of a short one.
+ */
+const PROMPT_BUDGET = 20000
+
+function spread(text: string, budget = PROMPT_BUDGET): string {
+  if (text.length <= budget) return text
+
+  // Enough windows to cover the document, each big enough to hold an argument.
+  const windows = 12
+  const size = Math.floor(budget / windows)
+  const stride = Math.floor((text.length - size) / (windows - 1))
+  const parts: string[] = []
+
+  for (let i = 0; i < windows; i += 1) {
+    const at = i * stride
+    // Start on a word boundary so a window never opens mid-word.
+    const from = i === 0 ? 0 : text.indexOf(' ', at) + 1 || at
+    parts.push(text.slice(from, from + size).trim())
+  }
+  return parts.join('\n\n[...]\n\n')
+}
+
 function pathsPrompt(name: string, text: string): string {
   return `You design oral examinations.
 
@@ -103,7 +136,7 @@ Every question must be answerable out loud in under a minute and must be about T
 
 Document: ${name}
 
-${text.slice(0, 20000)}
+${spread(text)}
 
 Reply with JSON only:
 {"paths":[{"name":"","description":"","difficulty":"Gentle|Moderate|Hard","minutes":0,"opener":"the first question in quotes","script":[{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}]}]}
