@@ -17,6 +17,21 @@ const KEYS = {
 
 export const DEFAULT_CODE = 'probe-demo'
 
+/**
+ * The judge-testing build does not pair, and must not.
+ *
+ * Pairing is a public ntfy topic named after the pairing code, and the default code is
+ * shared by everyone who never changes it. Two consequences, both unacceptable during a
+ * trial: another browser on that code can replace the reading and the questions midway
+ * through somebody's session, and this device broadcasts what it is examining to a topic
+ * anyone can read.
+ *
+ * Neither matters for the demo, where the whole point is two browsers finding each other.
+ * The trial is one machine with five people taking turns at it, so there is no peer to
+ * find and nothing to gain by looking.
+ */
+const SOLO = import.meta.env.VITE_TRIAL === '1'
+
 function read(key: string, fallback = ''): string {
   try {
     return localStorage.getItem(key) ?? fallback
@@ -78,7 +93,7 @@ export function useProbe() {
 
   /* Live pairing, for as long as this browser is signed in. */
   useEffect(() => {
-    if (!role) {
+    if (SOLO || !role) {
       subscriptionRef.current?.close()
       subscriptionRef.current = null
       setLink('offline')
@@ -114,7 +129,7 @@ export function useProbe() {
     (patch: Partial<Handoff>) => {
       setHandoff((prev) => {
         const next: Handoff = { ...prev, ...patch, from: device, at: Date.now() }
-        void publish(code, next)
+        if (!SOLO) void publish(code, next)
         return next
       })
     },
