@@ -78,7 +78,7 @@ describe('recycles', () => {
 })
 
 describe('scoreClaims', () => {
-  const claim = (support: Claim['support'], recycled = false): Claim => ({ text: 'x', support, recycled })
+  const claim = (support: Claim['support'], recycled = false): Claim => ({ text: 'x', support, recycled, passage: 0 })
 
   it('scores nothing when no claims were made', () => {
     expect(scoreClaims([]).score).toBe(0)

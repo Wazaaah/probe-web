@@ -6,6 +6,7 @@ import {
   evidenceFor,
   extractPrompt,
   readClaims,
+  passageFor,
   readVerdicts,
   recycles,
   scoreClaims,
@@ -405,7 +406,12 @@ export function makeBrain(config: BrainConfig): Brain | null {
       const verdicts = readVerdicts(checked?.verdicts, claims.length)
 
       return scoreClaims(
-        claims.map((text, i) => ({ text, support: verdicts[i], recycled: recycles(text, work) })),
+        claims.map((text, i) => ({
+          text,
+          support: verdicts[i],
+          recycled: recycles(text, work),
+          passage: passageFor(text, windows),
+        })),
       )
     },
 

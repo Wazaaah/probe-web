@@ -13,6 +13,8 @@ import {
   type Preparation,
   type TrialSetup,
 } from '../lib/trial'
+import { boundaryLine, boundaryOf, classReport, classReportText } from '../lib/report'
+import { readingText } from '../lib/trial'
 
 /**
  * The console for running a few people through the same reading.
@@ -325,7 +327,67 @@ export function Trial({
               </div>
             )}
 
-            <div className="stack gap-4" style={{ marginTop: 24 }}>
+            <div className="stack gap-4" style={{ marginTop: 26 }}>
+              <p className="body-med">Where each one stopped</p>
+              <p className="meta dim">
+                What they said about the reading that it bears out, and what it does not. Not
+                a mark — the thing a student can act on and a lecturer can teach to.
+              </p>
+            </div>
+            <div className="stack gap-10" style={{ marginTop: 10 }}>
+              {sessions.map((session) => {
+                const b = boundaryOf(session.grade)
+                return (
+                  <div key={session.startedAt} className="card flat" style={{ alignItems: 'flex-start', gap: 6 }}>
+                    <span className="row gap-8">
+                      <span className="card-title">{session.participant}</span>
+                      <span className="chip">{session.preparation}</span>
+                      <span className="chip">{session.authorship ?? 'unsaid'}</span>
+                    </span>
+                    <span className="meta">{boundaryLine(b)}</span>
+                    {b.held.length > 0 && (
+                      <span className="micro dim">Held: {b.held.slice(0, 3).join(' · ')}</span>
+                    )}
+                    {b.unsupported.length > 0 && (
+                      <span className="micro dim">Not borne out: {b.unsupported.slice(0, 3).join(' · ')}</span>
+                    )}
+                    {b.wrong.length > 0 && (
+                      <span className="micro dim">Contradicted by the reading: {b.wrong.slice(0, 2).join(' · ')}</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {sessions.length > 1 && (
+              <>
+                <div className="stack gap-4" style={{ marginTop: 26 }}>
+                  <p className="body-med">Across the class</p>
+                  <p className="meta dim">
+                    Grouped by which part of the reading each claim was checked against, so the
+                    topics come out of the exchanges rather than from anyone labelling them.
+                    Nobody is named.
+                  </p>
+                </div>
+                <div style={{ overflowX: 'auto', marginTop: 10 }}>
+                  <pre
+                    className="micro"
+                    style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      lineHeight: 1.7,
+                      margin: 0,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {classReportText(classReport(sessions, readingText()))}
+                  </pre>
+                </div>
+              </>
+            )}
+
+            <div className="rule" style={{ margin: '26px 0 22px' }} />
+
+            <div className="stack gap-4">
               <p className="body-med">Read them back blind</p>
               <p className="meta dim">
                 Shuffled, with the codes, self-reports and scores hidden, so your own read of

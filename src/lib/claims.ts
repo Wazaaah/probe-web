@@ -32,6 +32,15 @@ export interface Claim {
   support: Support
   /** True when the claim was already in their written passage, so it evidences nothing. */
   recycled: boolean
+  /**
+   * Which passage of the source this claim was checked against.
+   *
+   * Kept because it is free and it is what makes a class report possible. Claims checked
+   * against the same passage are about the same part of the paper, so grouping by this
+   * index clusters thirty conversations by topic without a single extra model call and
+   * without anybody having to name the topics in advance.
+   */
+  passage: number
 }
 
 export interface Grade {
@@ -67,6 +76,31 @@ export function windowsOf(source: string, size = 110, stride = 45): string[] {
     if (i + size >= all.length) break
   }
   return out
+}
+
+/**
+ * The single passage that best bears on a claim, as an index, or -1 when none does.
+ *
+ * Recorded per claim because grouping by it is what makes a class report possible:
+ * claims checked against the same passage are about the same part of the paper, so thirty
+ * conversations cluster by topic for free, with nobody having to name the topics first.
+ */
+export function passageFor(claim: string, windows: string[]): number {
+  const want = new Set(content(claim))
+  if (!want.size || !windows.length) return -1
+  let best = -1
+  let bestScore = 0
+  windows.forEach((text, i) => {
+    const have = new Set(content(text))
+    let hit = 0
+    for (const term of want) if (have.has(term)) hit += 1
+    const score = hit / want.size
+    if (score > bestScore) {
+      bestScore = score
+      best = i
+    }
+  })
+  return best
 }
 
 /**
