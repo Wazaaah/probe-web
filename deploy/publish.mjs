@@ -54,18 +54,22 @@ mkdirSync(stage, { recursive: true })
  */
 if (only !== 'both') {
   try {
-    git(['fetch', remote, 'gh-pages'], root)
-    // `git archive` reads the tree straight out of the object store. A checkout with
-    // --work-tree would reach the same files by way of this repository's index, which is
-    // not a thing a deploy script has any business touching.
-    const tar = join(root, '.deploy-existing.tar')
-    rmSync(tar, { force: true })
-    git(['archive', '-o', tar, 'FETCH_HEAD'], root)
-    execFileSync('tar', ['-xf', tar, '-C', stage], { cwd: root, stdio: 'pipe' })
-    rmSync(tar, { force: true })
+    // A shallow clone of the branch, rather than reading this repository's own objects.
+    // `git archive` piped through tar was the obvious route and does not survive Windows:
+    // tar reads an extraction path beginning `C:` as a remote host spec and refuses it.
+    // A clone needs no second tool and leaves this repository's index alone.
+    const tmp = join(root, '.deploy-existing')
+    rmSync(tmp, { recursive: true, force: true })
+    git(['clone', '--depth', '1', '--branch', 'gh-pages', remote, tmp], root)
+    rmSync(join(tmp, '.git'), { recursive: true, force: true })
+    cpSync(tmp, stage, { recursive: true })
+    rmSync(tmp, { recursive: true, force: true })
     console.log('Kept what is already on gh-pages, replacing only the requested half.')
-  } catch {
-    console.log('No gh-pages branch to preserve yet — publishing both.')
+  } catch (error) {
+    // Say why. A silent catch here is what turns "the branch could not be read" into a
+    // deploy that looks fine until the guard below stops it for reasons nobody can see.
+    const why = error instanceof Error ? error.message : String(error)
+    console.log(`Could not read the existing gh-pages branch: ${why.split('\n')[0]}`)
   }
 }
 
