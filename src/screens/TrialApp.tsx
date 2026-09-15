@@ -1,12 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { BrainSetup } from './BrainSetup'
 import { Session } from './Session'
 import { Trial } from './Trial'
 import { Review } from './Review'
 import { Upload } from './learner/Upload'
-import { TopBar } from '../components/ui'
-import { Icon } from '../components/Icon'
-import { recorder } from '../lib/trial'
+import { readingText, recorder, rememberSource, rememberWork } from '../lib/trial'
 import type { Examiner } from '../lib/examiner'
 import type { ProbeStore } from '../lib/store'
 import type { QuestionPath } from '../data/types'
@@ -16,21 +14,24 @@ import type { QuestionPath } from '../data/types'
  *
  * The shipped app opens on a choice between two roles, because the product is one person
  * examining another's work. None of that applies to an afternoon spent finding out
- * whether the judging works: there is one machine, one reading, and five people taking
- * turns at it. A role chooser, an inbox, a pairing code and a library are all things a
- * participant would have to be walked past before answering a single question, and each
- * one is a chance for the session to start badly.
+ * whether the judging works: there is one machine and five people taking turns at it. A
+ * role chooser, a pairing code, an inbox and a library are all things a participant has
+ * to be walked past before answering a question, and each is a chance for the session to
+ * start badly.
  *
- * So this build boots into the only sequence that matters — set the key, load the
- * reading, pick the angle once, then run people through it — and keeps the participant's
- * view down to the examination itself.
+ * Two texts, not one, because that is what Probe is for. Everyone is examined on the same
+ * reading, and each person brings a short passage they wrote about it. The questions come
+ * from what THEY wrote and can only be answered out of the reading — which is the point,
+ * and the reason a paragraph produced by someone who never opened the source is the case
+ * worth catching.
  *
- * The angle is chosen once, by the organiser, and then fixed. Five transcripts are only
- * comparable if they came from the same questions, and letting each participant pick
- * would quietly destroy the thing being measured.
+ * Questions are therefore built per participant and differ between them. That is correct
+ * and costs nothing here: the comparison at the end is each transcript against a blind
+ * human read of that same transcript, which never required two people to have been asked
+ * the same thing.
  */
 
-type Stage = 'brain' | 'reading' | 'angle' | 'console' | 'session' | 'recorded' | 'review'
+type Stage = 'brain' | 'reading' | 'console' | 'building' | 'session' | 'recorded' | 'review'
 
 /**
  * Whether the examiner has been set up at least once.
@@ -58,26 +59,44 @@ const settle = (): void => {
 }
 
 export function TrialApp({ store }: { store: ProbeStore }) {
-  const paths = store.handoff.paths
+  const [readingName, setReadingName] = useState(() => store.handoff.document)
   const [stage, setStage] = useState<Stage>(() => {
     if (!settled()) return 'brain'
-    if (!paths?.length) return 'reading'
-    return 'console'
+    return readingText() ? 'console' : 'reading'
   })
-  const [angle, setAngle] = useState(0)
+  const [path, setPath] = useState<QuestionPath | null>(null)
+  const [failed, setFailed] = useState('')
   const startedAt = useRef(Date.now())
 
-  const path: QuestionPath | null = useMemo(
-    () => (paths?.length ? paths[Math.min(angle, paths.length - 1)] : null),
-    [paths, angle],
-  )
+  /**
+   * Build this participant's questions from their own passage, against the reading.
+   *
+   * Done when they sit down rather than up front, because the questions depend on what
+   * they wrote. It takes a few seconds and the screen says so — a participant staring at
+   * a blank pane assumes the thing has crashed.
+   */
+  const begin = async (work: string) => {
+    rememberWork(work)
+    setFailed('')
+    setStage('building')
+    const source = { name: readingName || 'the reading', text: readingText() }
+    const paths = store.brain ? await store.brain.buildPaths('their passage', work, { source }) : null
+    const first = paths?.[0] ?? null
+    if (!first) {
+      setFailed('Could not write questions from that passage. Check the examiner key, or try a longer passage.')
+      setStage('console')
+      return
+    }
+    setPath(first)
+    setStage('session')
+  }
 
   /**
    * The score is computed and kept, but the participant is not shown it.
    *
    * It comes from the judge this whole exercise exists to test, and we already know it
    * ranks a confident bluffer above an honest hesitant student. Showing someone a mark
-   * from it would be unfair to them and would contaminate the next thing they say.
+   * from it would be unfair to them and would colour the next thing they say.
    */
   const finish = async (examiner: Examiner) => {
     const local = examiner.score()
@@ -92,7 +111,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
         store={store}
         onBack={() => {
           settle()
-          setStage(store.handoff.paths?.length ? 'console' : 'reading')
+          setStage(readingText() ? 'console' : 'reading')
         }}
       />
     )
@@ -103,60 +122,31 @@ export function TrialApp({ store }: { store: ProbeStore }) {
         brain={store.brain}
         onBack={() => setStage('brain')}
         kind="reading"
-        intro="Upload the reading itself — the thing you asked them to study, not anyone's essay about it. Probe writes four ways of finding out whether they engaged with it, and you pick one for everybody."
-        onSent={(document, generated) => {
-          store.push({ status: 'sent', document, paths: generated, pathIndex: 0, pathName: generated[0]?.name ?? '' })
-          setStage('angle')
+        skipPaths
+        intro="Upload the reading everybody was set — the source itself, not an essay about it. Each person brings their own passage about it when they sit down."
+        onSent={(name) => {
+          // Upload has already handed the text to the trial module; keep the name with it.
+          rememberSource(readingText())
+          setReadingName(name)
+          store.push({ status: 'sent', document: name })
+          setStage('console')
         }}
       />
     )
 
-  if (stage === 'angle' && paths?.length)
+  if (stage === 'review') return <Review onLeave={() => setStage('console')} />
+
+  if (stage === 'building')
     return (
       <div className="pane">
-        <TopBar title="Pick the angle" onBack={() => setStage('reading')} />
-        <div className="scroll pad">
-          <p className="body dim" style={{ padding: '4px 0 16px' }}>
-            Everyone gets this same one. Five transcripts only compare if they came from the
-            same questions.
-          </p>
-          <div className="stack gap-10">
-            {paths.map((option, i) => {
-              const on = angle === i
-              return (
-                <button
-                  key={option.name}
-                  className={`card${on ? ' chosen' : ''}`}
-                  style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}
-                  onClick={() => setAngle(i)}
-                  aria-pressed={on}
-                >
-                  <span className="grow stack gap-4">
-                    <span className="row gap-8">
-                      <span className="card-title">{option.name}</span>
-                      <span className="chip">{option.difficulty}</span>
-                    </span>
-                    <span className="meta dim">{option.description}</span>
-                    <span className="micro dimmer">
-                      {option.script.length} questions · about {option.minutes} min
-                    </span>
-                  </span>
-                  <span className={`radio${on ? ' on' : ''}`} style={{ marginTop: 4 }}>
-                    {on && <Icon name="check" size={13} color="var(--surface)" />}
-                  </span>
-                </button>
-              )
-            })}
+        <div className="scroll pad" style={{ display: 'grid', placeItems: 'center', minHeight: '70vh' }}>
+          <div className="stack gap-12" style={{ textAlign: 'center', maxWidth: 340 }}>
+            <p className="display">Reading it</p>
+            <p className="body dim">Working out what to ask about this passage. A few seconds.</p>
           </div>
-          <button className="btn" style={{ marginTop: 18 }} onClick={() => setStage('console')}>
-            Use this one for everybody
-          </button>
-          <div className="spacer-48" />
         </div>
       </div>
     )
-
-  if (stage === 'review') return <Review onLeave={() => setStage('console')} />
 
   if (stage === 'session' && path)
     return (
@@ -166,6 +156,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
           brain={store.brain}
           onStart={() => {
             startedAt.current = Date.now()
+            recorder.begin()
           }}
           onPause={() => setStage('console')}
           onFinish={(examiner) => void finish(examiner)}
@@ -194,10 +185,11 @@ export function TrialApp({ store }: { store: ProbeStore }) {
 
   return (
     <Trial
-      onLeave={() => setStage(paths?.length ? 'angle' : 'reading')}
+      onLeave={() => setStage('reading')}
       onReview={() => setStage('review')}
-      onBegin={path ? () => setStage('session') : undefined}
-      angleName={path?.name ?? ''}
+      onBegin={(work) => void begin(work)}
+      readingName={readingName}
+      error={failed}
       onChangeReading={() => setStage('reading')}
       onChangeBrain={() => setStage('brain')}
     />

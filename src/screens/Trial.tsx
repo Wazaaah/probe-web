@@ -38,15 +38,17 @@ export function Trial({
   onLeave,
   onReview,
   onBegin,
-  angleName = '',
+  readingName = '',
+  error = '',
   onChangeReading,
   onChangeBrain,
 }: {
   onLeave: () => void
   onReview: () => void
   /** Present only in the trial build, where the console also starts the session. */
-  onBegin?: () => void
-  angleName?: string
+  onBegin?: (work: string) => void
+  readingName?: string
+  error?: string
   onChangeReading?: () => void
   onChangeBrain?: () => void
 }) {
@@ -55,6 +57,7 @@ export function Trial({
   const [preparation, setPreparation] = useState<Preparation>(existing?.preparation ?? 'unsaid')
   const [sessions, setSessions] = useState(loadSessions())
   const [note, setNote] = useState('')
+  const [work, setWork] = useState('')
   const [armed, setArmed] = useState(Boolean(existing?.participant))
 
   const arm = () => {
@@ -139,21 +142,61 @@ export function Trial({
           )}
         </div>
 
-        {armed && (
+        {armed && onBegin && (
           <>
+            <div className="stack gap-4" style={{ marginTop: 24 }}>
+              <p className="body-med">What they wrote about it</p>
+              <p className="meta dim">
+                Paste their passage on {readingName || 'the reading'}. The questions come from
+                this, and can only be answered out of the reading — which is the point.
+              </p>
+            </div>
+            <textarea
+              className="field"
+              value={work}
+              rows={6}
+              placeholder="Their paragraph about the reading…"
+              onChange={(event) => setWork(event.target.value)}
+              style={{ marginTop: 10 }}
+            />
+            <p className="micro dimmer" style={{ marginTop: 6 }}>
+              {work.trim() ? `${work.trim().split(/\s+/).length} words` : 'About 150-250 words works best.'}
+            </p>
+
             <div className="notice row" style={{ marginTop: 14 }}>
               <span className="meta">
-                Recording <strong>{participant.trim()}</strong>
-                {angleName ? <> on <strong>{angleName}</strong></> : null}.
-                {onBegin ? ' Hand them the machine and start.' : ' Go back and run the session as normal.'}
+                Recording <strong>{participant.trim()}</strong>. Hand them the machine once it starts.
               </span>
             </div>
-            {onBegin && (
-              <button className="btn" onClick={onBegin} style={{ marginTop: 12 }}>
-                Begin the session
-              </button>
+
+            {error && (
+              <div className="notice row" style={{ marginTop: 10 }}>
+                <span className="meta">{error}</span>
+              </div>
+            )}
+
+            <button
+              className="btn"
+              onClick={() => onBegin(work.trim())}
+              disabled={work.trim().split(/\s+/).filter(Boolean).length < 40}
+              style={{ marginTop: 12 }}
+            >
+              Begin the session
+            </button>
+            {work.trim().split(/\s+/).filter(Boolean).length < 40 && (
+              <p className="meta dim" style={{ marginTop: 8 }}>
+                Needs about forty words before there is anything to ask about.
+              </p>
             )}
           </>
+        )}
+
+        {armed && !onBegin && (
+          <div className="notice row" style={{ marginTop: 14 }}>
+            <span className="meta">
+              Recording <strong>{participant.trim()}</strong>. Go back and run the session as normal.
+            </span>
+          </div>
         )}
 
         {(onChangeReading || onChangeBrain) && (
@@ -198,9 +241,10 @@ export function Trial({
               </pre>
             </div>
             <p className="micro dimmer" style={{ marginTop: 8 }}>
-              gYield is new grounded detail a probe pulled out; docEcho is how much was read
-              back off the page; silence is the median pause before answering. All being
-              checked, none of it applied to anyone's result.
+              gYield is new detail from the reading that a probe pulled out; srcEcho is how
+              much was read back off the reading, ownEcho how much was their own paragraph
+              restated; silence is the median pause before answering. All being checked,
+              none of it applied to anyone's result.
             </p>
 
             {latest && (

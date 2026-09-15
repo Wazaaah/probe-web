@@ -137,6 +137,54 @@ function spread(text: string, budget = PROMPT_BUDGET): string {
  */
 export type DocumentKind = 'own-work' | 'reading'
 
+/** The reading a piece of work is answerable to. */
+export interface Source {
+  name: string
+  text: string
+}
+
+/**
+ * Questions about what someone wrote, answerable to the reading they wrote it about.
+ *
+ * This is the case Probe is actually for, and it is the only one where the interesting
+ * failure lives. A student who read the source and a student whose paragraph was written
+ * for them can produce the same sentences; what separates them is whether the claims in
+ * those sentences survive contact with what the source says. So the questions are
+ * anchored at both ends — pointed at something THEY wrote, and answerable only out of the
+ * reading — because a question anchored at only one end can be met from the other.
+ *
+ * The budget is split rather than doubled. Their work is short and every word of it may
+ * matter; the reading is long and is being sampled anyway.
+ */
+function groundedPrompt(text: string, source: Source): string {
+  return `You design oral examinations.
+
+A student was set a reading and wrote the passage below about it. Find out whether they
+engaged with the reading or produced something plausible-sounding without it.
+
+Write four angles, each a different way of testing that:
+1. Where did this claim come from — take a specific thing they assert and ask what in the reading supports it
+2. What the reading actually says — a place their account and the source come apart
+3. What they left out — something the reading argues that their passage needed and skipped
+4. Push back using the reading — make them defend their line against the source's own words
+
+Rules, all of them load-bearing:
+- Every question must point at something the STUDENT wrote. Quote no more than six of their words.
+- Every question must be answerable only by someone who read the SOURCE. If it can be answered from their own passage alone, it is useless here.
+- Never invent a figure, date, finding or quotation. If the source does not contain it, it does not exist.
+- Answerable out loud in under a minute. No yes/no questions.
+
+THE STUDENT'S PASSAGE
+${spread(text, 6000)}
+
+THE READING (${source.name})
+${spread(source.text, 14000)}
+
+Reply with JSON only:
+{"paths":[{"name":"","description":"","difficulty":"Gentle|Moderate|Hard","minutes":0,"opener":"the first question in quotes","script":[{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}]}]}
+Exactly four paths, three to five questions each.`
+}
+
 function pathsPrompt(name: string, text: string, kind: DocumentKind): string {
   if (kind === 'reading')
     return `You design oral examinations.
@@ -271,7 +319,7 @@ async function ask(config: BrainConfig, system: string, user: string, maxTokens:
 export interface Brain {
   judge(path: QuestionPath, node: PathNode, said: string, probed: boolean): Promise<Verdict | null>
   summarise(path: QuestionPath, answers: Answer[]): Promise<Summary | null>
-  buildPaths(name: string, text: string, kind?: DocumentKind): Promise<QuestionPath[] | null>
+  buildPaths(name: string, text: string, opts?: { kind?: DocumentKind; source?: Source }): Promise<QuestionPath[] | null>
   check(): Promise<string>
 }
 
@@ -320,8 +368,8 @@ export function makeBrain(config: BrainConfig): Brain | null {
       }
     },
 
-    async buildPaths(name, text, kind = 'own-work') {
-      const json = await quiet('You reply with JSON only.', pathsPrompt(name, text, kind), 8000)
+    async buildPaths(name, text, opts = {}) {
+      const json = await quiet('You reply with JSON only.', opts.source ? groundedPrompt(text, opts.source) : pathsPrompt(name, text, opts.kind ?? 'own-work'), 8000)
       if (!json || !Array.isArray(json.paths)) return null
       const paths: QuestionPath[] = json.paths
         .filter((p: any) => p && Array.isArray(p.script) && p.script.length > 0)

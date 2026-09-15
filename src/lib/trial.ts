@@ -153,6 +153,8 @@ export interface TrialSignals {
   hedge: number
   boost: number
   repair: number
+  /** How much of the later answers repeats their own written passage back. */
+  workEcho: number
   /** New grounded specifics per hundred words, summed over every turn after the first. */
   groundedYield: number
   /** New specifics that do NOT occur in the document — invention rather than recall. */
@@ -184,7 +186,7 @@ const median = (xs: number[]): number => {
  * that appears on every page is available to anyone who glanced at the title, so counting
  * it would hand marks to exactly the person this is meant to distinguish.
  */
-export function signalsFor(turns: TrialTurn[], document: string): TrialSignals {
+export function signalsFor(turns: TrialTurn[], document: string, work = ''): TrialSignals {
   const said = turns.map((t) => t.said)
   const whole = said.join(' ')
   const opener = said[0] ?? ''
@@ -214,6 +216,7 @@ export function signalsFor(turns: TrialTurn[], document: string): TrialSignals {
     groundedYield: gained,
     ungroundedYield: invented,
     documentEcho: echo(later || whole, document, 3),
+    workEcho: work ? echo(later || whole, work, 3) : 0,
     selfEcho: later ? echo(later, opener, 3) : 0,
     abstractionDrift: later ? abstraction(later) - abstraction(opener) : 0,
     medianSilence: median(spoken.map((t) => t.silenceMs)) / 1000,
@@ -221,23 +224,52 @@ export function signalsFor(turns: TrialTurn[], document: string): TrialSignals {
   }
 }
 
-/* -- the document under examination -------------------------------------- */
+/* -- the two texts a session is measured against ------------------------- */
 
 /**
- * The text of whatever was last read in.
+ * The reading, and what this participant wrote about it.
  *
- * Held here rather than in the store because the store is published over the pairing
- * link, and a whole document does not belong on a 4KB pub/sub channel. Grounding needs
- * the full text and nothing else does, so it stays in this module and dies with the tab.
+ * Two texts because the question Probe asks is whether someone's claims survive contact
+ * with the source, and the measures below only mean anything if they can tell the two
+ * apart. New detail that turns up in the reading is recall; the same detail lifted from
+ * their own paragraph is restatement, and a sentence read back off the reading is neither.
+ *
+ * The reading persists across participants — one text, five people. Their work is
+ * replaced each time somebody new sits down.
+ *
+ * Held here rather than in the store because the store is published over the pairing link
+ * and a whole document does not belong on a 4KB pub/sub channel.
  */
-let currentDocument = ''
+const SOURCE = 'probe.trial.source'
 
-export function rememberDocument(text: string): void {
-  currentDocument = text
+let sourceText = (() => {
+  try {
+    return localStorage.getItem(SOURCE) ?? ''
+  } catch {
+    return ''
+  }
+})()
+let workText = ''
+
+export function rememberSource(text: string): void {
+  sourceText = text
+  try {
+    localStorage.setItem(SOURCE, text)
+  } catch {
+    /* too big for storage, or blocked: it still works for this tab's lifetime */
+  }
 }
 
-export function documentText(): string {
-  return currentDocument
+export function rememberWork(text: string): void {
+  workText = text
+}
+
+export const readingText = (): string => sourceText
+export const workingText = (): string => workText
+
+/** Kept so the ordinary (non-trial) upload path has somewhere to put its one document. */
+export function rememberDocument(text: string): void {
+  sourceText = text
 }
 
 /* -- the recorder -------------------------------------------------------- */
@@ -291,13 +323,15 @@ class Recorder {
   private startedAt = 0
   private firstWordAt = 0
   private document = ''
+  private work = ''
 
-  begin(document = currentDocument): void {
+  begin(document = sourceText, work = workText): void {
     this.turns = []
     this.startedAt = Date.now()
     this.askedAt = 0
     this.firstWordAt = 0
     this.document = document
+    this.work = work
   }
 
   /** The examiner has finished speaking and the microphone is open. */
@@ -340,7 +374,7 @@ class Recorder {
       turns: this.turns,
       answers,
       score,
-      signals: signalsFor(this.turns, this.document),
+      signals: signalsFor(this.turns, this.document, this.work),
       note: '',
     }
     keep(session)
@@ -420,7 +454,7 @@ export function exportSessions(sessions = loadSessions()): void {
 /** A compact table for reading on the spot, before anyone opens the JSON. */
 export function summarise(sessions = loadSessions()): string {
   if (!sessions.length) return 'No sessions recorded yet.'
-  const head = ['participant', 'prep', 'score', 'words', 'hedge', 'repair', 'gYield', 'docEcho', 'silence']
+  const head = ['participant', 'prep', 'score', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
   const rows = sessions.map((s) => [
     s.participant,
     s.preparation,
@@ -430,6 +464,7 @@ export function summarise(sessions = loadSessions()): string {
     (s.signals?.repair ?? 0).toFixed(2),
     (s.signals?.groundedYield ?? 0).toFixed(1),
     (s.signals?.documentEcho ?? 0).toFixed(1),
+    (s.signals?.workEcho ?? 0).toFixed(1),
     `${(s.signals?.medianSilence ?? 0).toFixed(1)}s`,
   ])
   const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)))

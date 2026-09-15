@@ -97,6 +97,32 @@ describe('signalsFor', () => {
     expect(s.medianProbeSilence).toBe(4)
   })
 
+  it('tells reading the source back apart from reading their own passage back', () => {
+    const work = 'I argue that Mill draws the line at conduct which affects only the person doing it.'
+    const readSource = signalsFor(
+      [
+        turn('It is about harm.'),
+        turn('The suppression of an opinion is a peculiar evil, because we lose the chance to exchange error for truth.', { probe: true }),
+      ],
+      DOCUMENT,
+      work,
+    )
+    const readSelf = signalsFor(
+      [turn('It is about harm.'), turn(work, { probe: true })],
+      DOCUMENT,
+      work,
+    )
+    // Quoting the reading is not the same failure as restating your own paragraph, and the
+    // two measures have to be able to disagree or neither is worth recording.
+    expect(readSource.documentEcho).toBeGreaterThan(readSource.workEcho)
+    expect(readSelf.workEcho).toBeGreaterThan(readSelf.documentEcho)
+  })
+
+  it('reports no work echo when no passage was supplied', () => {
+    const s = signalsFor([turn('Something about harm.')], DOCUMENT)
+    expect(s.workEcho).toBe(0)
+  })
+
   it('does not reward length: the same answer said twice over scores the same rates', () => {
     const once = 'I think it might be about harm, perhaps.'
     const short = signalsFor([turn(once)], DOCUMENT)

@@ -4,7 +4,7 @@ import { TopBar } from '../../components/ui'
 import { UnreadableFile, readDocument } from '../../lib/doc'
 import { rememberDocument } from '../../lib/trial'
 import { SEED_PATHS } from '../../data/sample'
-import type { Brain, DocumentKind } from '../../lib/brain'
+import type { Brain, DocumentKind, Source } from '../../lib/brain'
 import type { QuestionPath } from '../../data/types'
 
 type Stage = 'pick' | 'paste' | 'reading' | 'thinking' | 'failed'
@@ -23,6 +23,8 @@ export function Upload({
   onBack,
   intro,
   kind = 'own-work',
+  source,
+  skipPaths = false,
 }: {
   brain: Brain | null
   onSent: (document: string, paths: QuestionPath[]) => void
@@ -31,6 +33,10 @@ export function Upload({
   intro?: string
   /** 'reading' stops the examiner addressing them as the author of something they only read. */
   kind?: DocumentKind
+  /** When given, questions are anchored to this upload and answerable only from the source. */
+  source?: Source
+  /** Take the text and stop. Used for the reading, which is the source, not the subject. */
+  skipPaths?: boolean
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<Stage>('pick')
@@ -41,6 +47,14 @@ export function Upload({
 
   const build = async (documentName: string, text: string) => {
     setName(documentName)
+
+    // The reading is what answers are checked against, not the thing being examined, so
+    // there are no angles to write for it and no reason to make anyone wait for some.
+    if (skipPaths) {
+      onSent(documentName, [])
+      return
+    }
+
     setStage('thinking')
     setStep(1)
 
@@ -52,7 +66,7 @@ export function Upload({
       return
     }
 
-    const paths = await brain.buildPaths(documentName, text, kind)
+    const paths = await brain.buildPaths(documentName, text, { kind, source })
     setStep(2)
     if (!paths) {
       setProblem('The examiner could not write angles for that. Check the key under Examiner, or try a shorter document.')
