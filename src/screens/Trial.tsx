@@ -60,6 +60,9 @@ export function Trial({
   const [work, setWork] = useState('')
   const [armed, setArmed] = useState(Boolean(existing?.participant))
 
+  const words = work.trim() ? work.trim().split(/\s+/).length : 0
+  const ready = Boolean(participant.trim()) && preparation !== 'unsaid' && words >= 40
+
   const arm = () => {
     const setup: TrialSetup = { participant: participant.trim(), preparation, topic: '' }
     saveSetup(setup)
@@ -127,22 +130,24 @@ export function Trial({
           })}
         </div>
 
-        <div className="row gap-8" style={{ marginTop: 16 }}>
-          <button
-            className="btn"
-            onClick={arm}
-            disabled={!participant.trim() || preparation === 'unsaid'}
-          >
-            {armed ? 'Update' : 'Start recording'}
-          </button>
-          {armed && (
-            <button className="btn quiet" onClick={disarm}>
-              Stop
+        {!onBegin && (
+          <div className="row gap-8" style={{ marginTop: 16 }}>
+            <button
+              className="btn"
+              onClick={arm}
+              disabled={!participant.trim() || preparation === 'unsaid'}
+            >
+              {armed ? 'Update' : 'Start recording'}
             </button>
-          )}
-        </div>
+            {armed && (
+              <button className="btn quiet" onClick={disarm}>
+                Stop
+              </button>
+            )}
+          </div>
+        )}
 
-        {armed && onBegin && (
+        {onBegin && (
           <>
             <div className="stack gap-4" style={{ marginTop: 24 }}>
               <p className="body-med">What they wrote about it</p>
@@ -160,34 +165,33 @@ export function Trial({
               style={{ marginTop: 10 }}
             />
             <p className="micro dimmer" style={{ marginTop: 6 }}>
-              {work.trim() ? `${work.trim().split(/\s+/).length} words` : 'About 150-250 words works best.'}
+              {words < 40
+                ? `${words} words — about 150 to 250 works best`
+                : `${words} words`}
             </p>
 
-            <div className="notice row" style={{ marginTop: 14 }}>
-              <span className="meta">
-                Recording <strong>{participant.trim()}</strong>. Hand them the machine once it starts.
-              </span>
-            </div>
-
             {error && (
-              <div className="notice row" style={{ marginTop: 10 }}>
+              <div className="notice row" style={{ marginTop: 12 }}>
                 <span className="meta">{error}</span>
               </div>
             )}
 
             <button
               className="btn"
-              onClick={() => onBegin(work.trim())}
-              disabled={work.trim().split(/\s+/).filter(Boolean).length < 40}
-              style={{ marginTop: 12 }}
+              onClick={() => {
+                arm()
+                onBegin(work.trim())
+              }}
+              disabled={!ready}
+              style={{ marginTop: 14 }}
             >
               Begin the session
             </button>
-            {work.trim().split(/\s+/).filter(Boolean).length < 40 && (
-              <p className="meta dim" style={{ marginTop: 8 }}>
-                Needs about forty words before there is anything to ask about.
-              </p>
-            )}
+            <p className="meta dim" style={{ marginTop: 8 }}>
+              {ready
+                ? `Starts the examination and records it as ${participant.trim()}. Hand the machine over once it begins.`
+                : 'Needs a code, their answer above, and about forty words of their writing.'}
+            </p>
           </>
         )}
 
