@@ -44,10 +44,24 @@ export interface TrialTurn {
 
 export type Preparation = 'read' | 'skimmed' | 'unread' | 'unsaid'
 
+/**
+ * Who actually wrote the passage.
+ *
+ * Recorded separately from whether they read the paper, because they are separate
+ * questions and conflating them would test the wrong thing. A student who read the paper
+ * and had a model write up their view still knows the material; an oral examination
+ * should pass them. A student who read nothing and had a model write the same paragraph
+ * should not. If Probe cannot tell those two apart it is detecting authorship rather than
+ * understanding, which is not what anyone wants built.
+ */
+export type Authorship = 'own' | 'assisted' | 'ai' | 'unsaid'
+
 export interface TrialSession {
   participant: string
   /** Self-reported before starting, and never shown to the examiner. */
   preparation: Preparation
+  /** Self-reported before starting, and never shown to the examiner. */
+  authorship: Authorship
   document: string
   startedAt: number
   endedAt: number
@@ -280,6 +294,7 @@ const SESSIONS = 'probe.trial.sessions'
 export interface TrialSetup {
   participant: string
   preparation: Preparation
+  authorship: Authorship
   /** Optional ntfy topic; when set, a finished session is pushed there as well as kept. */
   topic: string
 }
@@ -368,6 +383,7 @@ class Recorder {
     const session: TrialSession = {
       participant: setup.participant,
       preparation: setup.preparation,
+      authorship: setup.authorship ?? 'unsaid',
       document: this.document.slice(0, 200),
       startedAt: this.startedAt,
       endedAt: Date.now(),
@@ -454,10 +470,11 @@ export function exportSessions(sessions = loadSessions()): void {
 /** A compact table for reading on the spot, before anyone opens the JSON. */
 export function summarise(sessions = loadSessions()): string {
   if (!sessions.length) return 'No sessions recorded yet.'
-  const head = ['participant', 'prep', 'score', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
+  const head = ['participant', 'prep', 'wrote', 'score', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
   const rows = sessions.map((s) => [
     s.participant,
     s.preparation,
+    s.authorship ?? 'unsaid',
     s.score == null ? '—' : String(s.score),
     String(s.signals?.words ?? 0),
     (s.signals?.hedge ?? 0).toFixed(2),
@@ -550,6 +567,7 @@ export function blindTranscript(session: TrialSession): string {
 export interface Comparison {
   participant: string
   preparation: Preparation
+  authorship: Authorship
   /** Your blind rating, rescaled to 0-100 so it sits beside the app's score. */
   blind: number | null
   rating: number | null
@@ -567,6 +585,7 @@ export function compare(sessions = loadSessions(), reviews = loadReviews()): Com
     return {
       participant: s.participant,
       preparation: s.preparation,
+      authorship: s.authorship ?? 'unsaid',
       blind,
       rating: review?.rating ?? null,
       app: s.score,
@@ -579,10 +598,11 @@ export function compare(sessions = loadSessions(), reviews = loadReviews()): Com
 /** The comparison as a table, for reading on the spot. */
 export function comparisonTable(rows: Comparison[]): string {
   if (!rows.length) return 'Nothing to compare yet.'
-  const head = ['who', 'said they did', 'you (1-5)', 'you /100', 'app /100', 'app minus you']
+  const head = ['who', 'read it', 'wrote it', 'you (1-5)', 'you /100', 'app /100', 'app minus you']
   const body = rows.map((r) => [
     r.participant,
     r.preparation,
+    r.authorship ?? 'unsaid',
     r.rating == null ? '—' : String(r.rating),
     r.blind == null ? '—' : String(r.blind),
     r.app == null ? '—' : String(r.app),

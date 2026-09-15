@@ -9,6 +9,7 @@ import {
   saveSetup,
   summarise,
   trialSetup,
+  type Authorship,
   type Preparation,
   type TrialSetup,
 } from '../lib/trial'
@@ -27,6 +28,22 @@ import {
  * shown to the organiser only, never to the participant: they are being validated, not
  * applied, and nobody should receive a mark from a number we are still checking.
  */
+
+/**
+ * Who wrote the passage, asked separately from whether they read the paper.
+ *
+ * These are different questions and collapsing them tests the wrong thing. Someone who
+ * read the paper and had a model write up their view still knows the material and an oral
+ * examination should pass them; someone who read nothing and produced the same paragraph
+ * should not. Probe is supposed to tell those two apart. If it cannot, it is detecting
+ * authorship rather than understanding, and that is worth finding out on five people
+ * rather than on a cohort.
+ */
+const AUTHORSHIP: { id: Authorship; label: string; hint: string }[] = [
+  { id: 'own', label: 'They wrote it', hint: 'Their own words, start to finish' },
+  { id: 'assisted', label: 'With AI help', hint: 'Drafted or tidied with a model' },
+  { id: 'ai', label: 'AI wrote it', hint: 'Start to finish, barely touched' },
+]
 
 const PREPARATIONS: { id: Preparation; label: string; hint: string }[] = [
   { id: 'read', label: 'Read it properly', hint: 'Sat down with it, start to finish' },
@@ -55,16 +72,17 @@ export function Trial({
   const existing = trialSetup()
   const [participant, setParticipant] = useState(existing?.participant ?? '')
   const [preparation, setPreparation] = useState<Preparation>(existing?.preparation ?? 'unsaid')
+  const [authorship, setAuthorship] = useState<Authorship>(existing?.authorship ?? 'unsaid')
   const [sessions, setSessions] = useState(loadSessions())
   const [note, setNote] = useState('')
   const [work, setWork] = useState('')
   const [armed, setArmed] = useState(Boolean(existing?.participant))
 
   const words = work.trim() ? work.trim().split(/\s+/).length : 0
-  const ready = Boolean(participant.trim()) && preparation !== 'unsaid' && words >= 40
+  const ready = Boolean(participant.trim()) && preparation !== 'unsaid' && authorship !== 'unsaid' && words >= 40
 
   const arm = () => {
-    const setup: TrialSetup = { participant: participant.trim(), preparation, topic: '' }
+    const setup: TrialSetup = { participant: participant.trim(), preparation, authorship, topic: '' }
     saveSetup(setup)
     setArmed(true)
     setSessions(loadSessions())
@@ -130,12 +148,42 @@ export function Trial({
           })}
         </div>
 
+        <div className="stack gap-4" style={{ marginTop: 24 }}>
+          <p className="body-med">And who wrote the passage?</p>
+          <p className="meta dim">
+            Separate question. Reading the paper and writing the words are different things,
+            and Probe is supposed to care about the first.
+          </p>
+        </div>
+        <div className="stack gap-10" style={{ marginTop: 10 }}>
+          {AUTHORSHIP.map((option) => {
+            const on = authorship === option.id
+            return (
+              <button
+                key={option.id}
+                className={`card${on ? ' chosen' : ''}`}
+                style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}
+                onClick={() => setAuthorship(option.id)}
+                aria-pressed={on}
+              >
+                <span className="grow stack gap-4">
+                  <span className="card-title">{option.label}</span>
+                  <span className="meta dim">{option.hint}</span>
+                </span>
+                <span className={`radio${on ? ' on' : ''}`} style={{ marginTop: 4 }}>
+                  {on && <Icon name="check" size={13} color="var(--surface)" />}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
         {!onBegin && (
           <div className="row gap-8" style={{ marginTop: 16 }}>
             <button
               className="btn"
               onClick={arm}
-              disabled={!participant.trim() || preparation === 'unsaid'}
+              disabled={!participant.trim() || preparation === 'unsaid' || authorship === 'unsaid'}
             >
               {armed ? 'Update' : 'Start recording'}
             </button>
@@ -190,7 +238,7 @@ export function Trial({
             <p className="meta dim" style={{ marginTop: 8 }}>
               {ready
                 ? `Starts the examination and records it as ${participant.trim()}. Hand the machine over once it begins.`
-                : 'Needs a code, their answer above, and about forty words of their writing.'}
+                : 'Needs a code, both answers above, and about forty words of their writing.'}
             </p>
           </>
         )}
