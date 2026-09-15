@@ -21,10 +21,13 @@ export function Upload({
   brain,
   onSent,
   onBack,
+  intro,
 }: {
   brain: Brain | null
   onSent: (document: string, paths: QuestionPath[]) => void
   onBack: () => void
+  /** Overrides the standing copy, which describes a reviewer the trial build does not have. */
+  intro?: string
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<Stage>('pick')
@@ -102,8 +105,8 @@ export function Upload({
       <TopBar title="New document" onBack={onBack} />
       <div className="scroll pad">
         <p className="body dim" style={{ padding: '4px 0 20px' }}>
-          Probe reads it, writes four ways of attacking it, and sends all four to your reviewer. They choose one. You
-          only ever see the one they chose.
+          {intro ??
+            'Probe reads it, writes four ways of attacking it, and sends all four to your reviewer. They choose one. You only ever see the one they chose.'}
         </p>
 
         {stage === 'failed' && (

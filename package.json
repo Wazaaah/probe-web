@@ -3,14 +3,17 @@
   "version": "2.8.0",
   "private": true,
   "type": "module",
-  "description": "Probe — a voice examination on the document you have to defend.",
+  "description": "Probe \u2014 a voice examination on the document you have to defend.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vitest run && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && node deploy/publish.mjs"
+    "deploy": "npm run build && node deploy/publish.mjs",
+    "build:trial": "tsc --noEmit && vitest run && vite build --mode trial",
+    "dev:trial": "vite --mode trial",
+    "deploy:trial": "npm run build:trial && node deploy/publish.mjs"
   },
   "dependencies": {
     "pdfjs-dist": "^4.10.38",

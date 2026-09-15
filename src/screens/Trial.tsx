@@ -34,7 +34,22 @@ const PREPARATIONS: { id: Preparation; label: string; hint: string }[] = [
   { id: 'unread', label: 'Not at all', hint: 'Going in cold, on purpose' },
 ]
 
-export function Trial({ onLeave, onReview }: { onLeave: () => void; onReview: () => void }) {
+export function Trial({
+  onLeave,
+  onReview,
+  onBegin,
+  angleName = '',
+  onChangeReading,
+  onChangeBrain,
+}: {
+  onLeave: () => void
+  onReview: () => void
+  /** Present only in the trial build, where the console also starts the session. */
+  onBegin?: () => void
+  angleName?: string
+  onChangeReading?: () => void
+  onChangeBrain?: () => void
+}) {
   const existing = trialSetup()
   const [participant, setParticipant] = useState(existing?.participant ?? '')
   const [preparation, setPreparation] = useState<Preparation>(existing?.preparation ?? 'unsaid')
@@ -125,11 +140,34 @@ export function Trial({ onLeave, onReview }: { onLeave: () => void; onReview: ()
         </div>
 
         {armed && (
-          <div className="notice row" style={{ marginTop: 14 }}>
-            <span className="meta">
-              Recording <strong>{participant.trim()}</strong>. Go back, pick the reading, and run
-              the session exactly as normal.
-            </span>
+          <>
+            <div className="notice row" style={{ marginTop: 14 }}>
+              <span className="meta">
+                Recording <strong>{participant.trim()}</strong>
+                {angleName ? <> on <strong>{angleName}</strong></> : null}.
+                {onBegin ? ' Hand them the machine and start.' : ' Go back and run the session as normal.'}
+              </span>
+            </div>
+            {onBegin && (
+              <button className="btn" onClick={onBegin} style={{ marginTop: 12 }}>
+                Begin the session
+              </button>
+            )}
+          </>
+        )}
+
+        {(onChangeReading || onChangeBrain) && (
+          <div className="row gap-8" style={{ marginTop: 16, flexWrap: 'wrap' }}>
+            {onChangeReading && (
+              <button className="btn quiet small" onClick={onChangeReading}>
+                Change reading
+              </button>
+            )}
+            {onChangeBrain && (
+              <button className="btn quiet small" onClick={onChangeBrain}>
+                Examiner settings
+              </button>
+            )}
           </div>
         )}
 
