@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { Examiner } from '../lib/examiner'
+import { recorder } from '../lib/trial'
 import { Voice } from '../lib/voice'
 import type { Brain } from '../lib/brain'
 import type { QuestionPath } from '../data/types'
@@ -181,8 +182,13 @@ export function Session({
       return
     }
     setRecording(true)
+    // The silence before the first word is the measure a trial wants; nothing else uses it.
+    recorder.asked()
     voice.listen({
-      onPartial: setHeard,
+      onPartial: (said) => {
+        recorder.speaking()
+        setHeard(said)
+      },
       onFinal: (said) => {
         setRecording(false)
         submitRef.current(said)
@@ -216,6 +222,8 @@ export function Session({
       setOrb('thinking')
 
       const node = examiner.node
+      recorder.answered(examiner.position, node?.question ?? question, examiner.probedHere, said, typingRef.current)
+
       let verdict = node && brain ? await brain.judge(path, node, said, examiner.probedHere) : null
       if (!verdict) {
         // A dropped call must never stall a live examination.
@@ -241,6 +249,7 @@ export function Session({
   useEffect(() => {
     const first = examiner.opening()
     if (first) {
+      recorder.begin()
       onStart()
       ask(first.question, SESSION_INTRO)
     }

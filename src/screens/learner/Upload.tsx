@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { TopBar } from '../../components/ui'
 import { UnreadableFile, readDocument } from '../../lib/doc'
+import { rememberDocument } from '../../lib/trial'
 import { SEED_PATHS } from '../../data/sample'
 import type { Brain } from '../../lib/brain'
 import type { QuestionPath } from '../../data/types'
@@ -61,6 +62,7 @@ export function Upload({
     setStep(0)
     try {
       const text = await readDocument(file)
+      rememberDocument(text)
       await build(file.name, text)
     } catch (error) {
       setProblem(error instanceof UnreadableFile ? error.message : 'That file could not be read in the browser.')

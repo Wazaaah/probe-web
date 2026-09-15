@@ -12,6 +12,7 @@ import { Upload } from './Upload'
 import { LEARNER, SEED_PATHS } from '../../data/sample'
 import { askToNotify } from '../../lib/notify'
 import { describeRun, recordRun } from '../../lib/runs'
+import { recorder } from '../../lib/trial'
 import type { Examiner } from '../../lib/examiner'
 import type { ProbeStore } from '../../lib/store'
 import type { Handoff, QuestionPath, SessionResult } from '../../data/types'
@@ -102,6 +103,8 @@ export function Learner({ store }: { store: ProbeStore }) {
       score: final.score,
       at: Date.now(),
     })
+    // Only does anything when a trial has been armed on this device.
+    recorder.finish(examiner.answers, final.score)
     setSending(false)
   }
 
