@@ -219,5 +219,15 @@ export const REPORT_BARS: ConceptScore[] = [
   { label: 'Vendor exceptions', state: 'shaky', percent: 58 },
 ]
 
-export const SESSION_INTRO =
-  "I've read it. I'm going to ask you about it. Answer out loud, and take your time."
+/**
+ * What the examiner says before the first question.
+ *
+ * Nothing. A tutor who has just been handed your essay does not open by announcing that
+ * they read it and intend to ask about it — they ask. The preamble was there to orient
+ * someone who had arrived cold, and in practice it made the machine sound like a machine
+ * reading out its own instructions before every session.
+ *
+ * Kept as a constant rather than deleted so that a caller can put something back if a
+ * particular setting needs it.
+ */
+export const SESSION_INTRO = ''

@@ -114,6 +114,12 @@ describe('classReport', () => {
     expect(text).not.toMatch(/\bP[123]\b/)
   })
 
+  it('drops a topic whose passage no longer resolves, rather than quoting nothing', () => {
+    // The reading was replaced after the examination, so passage 99 has no text behind it.
+    const stale = [{ participant: 'P1', grade: grade([claim('something', 'supported', 99)]) }]
+    expect(classReport(stale, SOURCE).topics).toEqual([])
+  })
+
   it('handles a class where nobody said anything checkable', () => {
     const r = classReport([{ participant: 'P1', grade: null }], SOURCE)
     expect(r.students).toBe(0)

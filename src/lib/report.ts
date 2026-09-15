@@ -148,6 +148,10 @@ export function classReport(
       missed: [...row.missed].filter((p) => !row.held.has(p)).length,
       silent: usable.length - new Set([...row.held, ...row.missed]).size,
     }))
+    // A passage index that no longer resolves — the reading was changed after the
+    // examination, say — has nothing to show a lecturer and is dropped rather than
+    // rendered as an empty quotation.
+    .filter((t) => t.excerpt.trim().length > 0)
     // Thinnest first: fewest students with any command of it, ties broken by who tried.
     .sort((a, b) => a.held - b.held || b.missed - a.missed)
 

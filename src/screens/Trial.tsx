@@ -7,13 +7,12 @@ import {
   exportSessions,
   loadSessions,
   saveSetup,
-  summarise,
   trialSetup,
   type Authorship,
   type Preparation,
   type TrialSetup,
 } from '../lib/trial'
-import { boundaryLine, boundaryOf, classReport, classReportText } from '../lib/report'
+import { boundaryLine, boundaryOf, classReport } from '../lib/report'
 import { readingText } from '../lib/trial'
 
 /**
@@ -281,25 +280,6 @@ export function Trial({
 
         {sessions.length > 0 && (
           <>
-            <div style={{ overflowX: 'auto', marginTop: 12 }}>
-              <pre
-                className="micro"
-                style={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  lineHeight: 1.7,
-                  margin: 0,
-                  whiteSpace: 'pre',
-                }}
-              >
-                {summarise(sessions)}
-              </pre>
-            </div>
-            <p className="micro dimmer" style={{ marginTop: 8 }}>
-              gYield is new detail from the reading that a probe pulled out; srcEcho is how
-              much was read back off the reading, ownEcho how much was their own paragraph
-              restated; silence is the median pause before answering. All being checked,
-              none of it applied to anyone's result.
-            </p>
 
             {latest && (
               <div className="stack gap-4" style={{ marginTop: 20 }}>
@@ -369,19 +349,49 @@ export function Trial({
                     Nobody is named.
                   </p>
                 </div>
-                <div style={{ overflowX: 'auto', marginTop: 10 }}>
-                  <pre
-                    className="micro"
-                    style={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      lineHeight: 1.7,
-                      margin: 0,
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {classReportText(classReport(sessions, readingText()))}
-                  </pre>
-                </div>
+                {(() => {
+                  const report = classReport(sessions, readingText())
+                  if (!report.students) {
+                    return (
+                      <p className="meta dim" style={{ marginTop: 10 }}>
+                        Nothing checkable has been said about the reading yet.
+                      </p>
+                    )
+                  }
+                  return (
+                    <div className="stack gap-12" style={{ marginTop: 12 }}>
+                      {report.shared.length > 0 && (
+                        <div className="card flat" style={{ alignItems: 'flex-start', gap: 6 }}>
+                          <span className="card-title">Believed by more than one of them, and not in the reading</span>
+                          {report.shared.slice(0, 4).map((claim) => (
+                            <span key={claim.text} className="meta">
+                              <strong>{claim.students} of {report.students}</strong> — {claim.text}
+                            </span>
+                          ))}
+                          <span className="micro dimmer">
+                            The same wrong idea in several heads usually comes from the teaching
+                            rather than the reading.
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="card flat" style={{ alignItems: 'flex-start', gap: 8 }}>
+                        <span className="card-title">Thinnest parts of the reading</span>
+                        {report.topics.slice(0, 4).map((topic) => (
+                          <span key={topic.passage} className="stack gap-4" style={{ width: '100%' }}>
+                            <span className="meta">
+                              <strong>{topic.held} of {report.students}</strong> said something about this the
+                              reading bears out
+                              {topic.missed > 0 && ` · ${topic.missed} tried and missed`}
+                              {topic.silent > 0 && ` · ${topic.silent} never went near it`}
+                            </span>
+                            <span className="micro dimmer">“{topic.excerpt}…”</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </>
             )}
 
