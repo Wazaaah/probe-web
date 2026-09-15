@@ -4,7 +4,7 @@ import { TopBar } from '../../components/ui'
 import { UnreadableFile, readDocument } from '../../lib/doc'
 import { rememberDocument } from '../../lib/trial'
 import { SEED_PATHS } from '../../data/sample'
-import type { Brain } from '../../lib/brain'
+import type { Brain, DocumentKind } from '../../lib/brain'
 import type { QuestionPath } from '../../data/types'
 
 type Stage = 'pick' | 'paste' | 'reading' | 'thinking' | 'failed'
@@ -22,12 +22,15 @@ export function Upload({
   onSent,
   onBack,
   intro,
+  kind = 'own-work',
 }: {
   brain: Brain | null
   onSent: (document: string, paths: QuestionPath[]) => void
   onBack: () => void
   /** Overrides the standing copy, which describes a reviewer the trial build does not have. */
   intro?: string
+  /** 'reading' stops the examiner addressing them as the author of something they only read. */
+  kind?: DocumentKind
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<Stage>('pick')
@@ -49,7 +52,7 @@ export function Upload({
       return
     }
 
-    const paths = await brain.buildPaths(documentName, text)
+    const paths = await brain.buildPaths(documentName, text, kind)
     setStep(2)
     if (!paths) {
       setProblem('The examiner could not write angles for that. Check the key under Examiner, or try a shorter document.')

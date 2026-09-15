@@ -102,7 +102,8 @@ export function TrialApp({ store }: { store: ProbeStore }) {
       <Upload
         brain={store.brain}
         onBack={() => setStage('brain')}
-        intro="Probe reads it and writes four ways of attacking it. You pick one, and everybody gets that same one."
+        kind="reading"
+        intro="Upload the reading itself — the thing you asked them to study, not anyone's essay about it. Probe writes four ways of finding out whether they engaged with it, and you pick one for everybody."
         onSent={(document, generated) => {
           store.push({ status: 'sent', document, paths: generated, pathIndex: 0, pathName: generated[0]?.name ?? '' })
           setStage('angle')

@@ -126,7 +126,41 @@ function spread(text: string, budget = PROMPT_BUDGET): string {
   return parts.join('\n\n[...]\n\n')
 }
 
-function pathsPrompt(name: string, text: string): string {
+/**
+ * Whose document is it?
+ *
+ * The default assumes the person answering wrote it, which is the product: someone
+ * defending their own work to a board. A shared reading inverts that. Asking a student to
+ * "defend your claim that Mill is wrong about harm" when they did not write the claim is
+ * not a hard question, it is a confusing one, and a confused participant in a five-person
+ * trial is a transcript you cannot use.
+ */
+export type DocumentKind = 'own-work' | 'reading'
+
+function pathsPrompt(name: string, text: string, kind: DocumentKind): string {
+  if (kind === 'reading')
+    return `You design oral examinations.
+
+Given a text someone was asked to read, write four different angles for finding out
+whether they actually engaged with it. Not four topics — four kinds of pressure, each
+exposing a different way of having skimmed it:
+1. Trace the argument  2. Stress-test the terms it defines  3. Apply it to a case it never mentions  4. Push back on it and make them answer
+
+They did not write this and must never be addressed as though they did. Ask what the text
+argues, why, and what follows — never "defend your claim".
+
+Every question must be answerable out loud in under a minute and must be about THIS text —
+its specific moves, terms and examples. Never anything generic. A question someone could
+answer from the title alone is useless here.
+
+Text: ${name}
+
+${spread(text)}
+
+Reply with JSON only:
+{"paths":[{"name":"","description":"","difficulty":"Gentle|Moderate|Hard","minutes":0,"opener":"the first question in quotes","script":[{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}]}]}
+Exactly four paths, three to five questions each.`
+
   return `You design oral examinations.
 
 Given a document someone will have to defend in front of other people, write four different angles it could be attacked from. Not four topics — four kinds of pressure, each exposing a different way of not really knowing it:
@@ -237,7 +271,7 @@ async function ask(config: BrainConfig, system: string, user: string, maxTokens:
 export interface Brain {
   judge(path: QuestionPath, node: PathNode, said: string, probed: boolean): Promise<Verdict | null>
   summarise(path: QuestionPath, answers: Answer[]): Promise<Summary | null>
-  buildPaths(name: string, text: string): Promise<QuestionPath[] | null>
+  buildPaths(name: string, text: string, kind?: DocumentKind): Promise<QuestionPath[] | null>
   check(): Promise<string>
 }
 
@@ -286,8 +320,8 @@ export function makeBrain(config: BrainConfig): Brain | null {
       }
     },
 
-    async buildPaths(name, text) {
-      const json = await quiet('You reply with JSON only.', pathsPrompt(name, text), 8000)
+    async buildPaths(name, text, kind = 'own-work') {
+      const json = await quiet('You reply with JSON only.', pathsPrompt(name, text, kind), 8000)
       if (!json || !Array.isArray(json.paths)) return null
       const paths: QuestionPath[] = json.paths
         .filter((p: any) => p && Array.isArray(p.script) && p.script.length > 0)
