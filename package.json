@@ -10,10 +10,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && node deploy/publish.mjs",
-    "build:trial": "tsc --noEmit && vitest run && vite build --mode trial",
+    "deploy": "npm run typecheck && npm test && node deploy/publish.mjs",
     "dev:trial": "vite --mode trial",
-    "deploy:trial": "npm run build:trial && node deploy/publish.mjs"
+    "deploy:trial": "npm run typecheck && npm test && node deploy/publish.mjs --trial",
+    "deploy:demo": "npm run typecheck && npm test && node deploy/publish.mjs --demo",
+    "build:trial": "vite build --mode trial"
   },
   "dependencies": {
     "pdfjs-dist": "^4.10.38",
