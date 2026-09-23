@@ -269,7 +269,14 @@ export function Session({
       // device, so it stays on its original fixed script.
       if (ground && brain && worthContinuing(examiner.answers)) {
         setOrb('thinking')
-        const nextNode = await brain.continuePath(path, examiner.answers, ground.work, ground.docs, ground.index)
+        // A dropped call here reads identically to the model genuinely having nothing
+        // left to ask — both return null — which silently ends the exam well short of
+        // where it was meant to stop. One retry costs a student a few seconds; ending an
+        // exam early because of a network blip costs the whole rest of the transcript.
+        let nextNode = await brain.continuePath(path, examiner.answers, ground.work, ground.docs, ground.index)
+        if (!nextNode && alive.current) {
+          nextNode = await brain.continuePath(path, examiner.answers, ground.work, ground.docs, ground.index)
+        }
         if (!alive.current) return
         if (nextNode) {
           examiner.extend([nextNode])
