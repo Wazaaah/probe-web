@@ -163,11 +163,14 @@ export function RunExam({ store }: { store: ProbeStore }) {
           {boundary.held.length > 0 && <span className="pa-meta">Held: {boundary.held.slice(0, 4).join(' · ')}</span>}
           {boundary.unsupported.length > 0 && <span className="pa-meta">Not borne out: {boundary.unsupported.slice(0, 4).join(' · ')}</span>}
           {boundary.wrong.length > 0 && <span className="pa-meta">Contradicted: {boundary.wrong.slice(0, 4).join(' · ')}</span>}
-          {boundary.checkFailed && (
-            <button className="pa-btn" style={{ alignSelf: 'flex-start' }} disabled={regrading} onClick={() => void retryGrade()}>
-              {regrading ? 'Re-grading…' : 'Retry grading'}
-            </button>
-          )}
+          <button
+            className={boundary.checkFailed ? 'pa-btn' : 'pa-btn quiet'}
+            style={{ alignSelf: 'flex-start' }}
+            disabled={regrading}
+            onClick={() => void retryGrade()}
+          >
+            {regrading ? 'Re-grading…' : boundary.checkFailed ? 'Retry grading' : 'Re-grade'}
+          </button>
         </div>
         {!boundary.checkFailed && (
           <div className="pa-row pa-gap-10">

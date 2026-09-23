@@ -55,29 +55,28 @@ export function StudentRecord({ store, indexNumber, onBack }: { store: ProbeStor
               {boundary.held.length > 0 && <span className="pa-meta">Held: {boundary.held.slice(0, 4).join(' · ')}</span>}
               {boundary.unsupported.length > 0 && <span className="pa-meta">Not borne out: {boundary.unsupported.slice(0, 4).join(' · ')}</span>}
               {boundary.wrong.length > 0 && <span className="pa-meta">Contradicted: {boundary.wrong.slice(0, 4).join(' · ')}</span>}
-              {boundary.checkFailed ? (
+              <div className="pa-row pa-gap-10">
                 <button
-                  className="pa-btn"
-                  style={{ alignSelf: 'flex-start' }}
+                  className={boundary.checkFailed ? 'pa-btn' : 'pa-btn quiet'}
                   disabled={regradingId === exam.id}
                   onClick={() => void retryGrade(exam.id)}
                 >
-                  {regradingId === exam.id ? 'Re-grading…' : 'Retry grading'}
+                  {regradingId === exam.id ? 'Re-grading…' : boundary.checkFailed ? 'Retry grading' : 'Re-grade'}
                 </button>
-              ) : (
-                <button
-                  className="pa-btn quiet"
-                  style={{ alignSelf: 'flex-start' }}
-                  onClick={() =>
-                    downloadReport(
-                      `${exam.student.indexNumber}-${exam.student.name.replace(/\s+/g, '-')}-${week.replace(/\s+/g, '-')}.txt`,
-                      studentReportText(exam.student.name, exam.student.indexNumber, week, boundary),
-                    )
-                  }
-                >
-                  Download this report
-                </button>
-              )}
+                {!boundary.checkFailed && (
+                  <button
+                    className="pa-btn quiet"
+                    onClick={() =>
+                      downloadReport(
+                        `${exam.student.indexNumber}-${exam.student.name.replace(/\s+/g, '-')}-${week.replace(/\s+/g, '-')}.txt`,
+                        studentReportText(exam.student.name, exam.student.indexNumber, week, boundary),
+                      )
+                    }
+                  >
+                    Download this report
+                  </button>
+                )}
+              </div>
             </div>
           )
         })}
