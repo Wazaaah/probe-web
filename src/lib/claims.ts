@@ -23,9 +23,21 @@ import type { Answer } from '../data/types'
  * paper at once — a model reading 6,000 words to check one sentence loses the sentence.
  * And a claim already present in the student's own write-up scores nothing: repeating
  * your own paragraph shows you can read your own paragraph.
+ *
+ * A third detail was added once readings stopped being a single document: retrieval
+ * spans every uploaded reading at once, tagged with which one each passage came from. A
+ * claim gets checked against whichever reading actually bears on it, not against the
+ * reading the student happened to write about most — which matters the moment there is
+ * more than one on the list.
  */
 
 export type Support = 'supported' | 'contradicted' | 'absent'
+
+/** One uploaded reading. `name` is what a lecturer or a report shows for it. */
+export interface SourceDoc {
+  name: string
+  text: string
+}
 
 export interface Claim {
   text: string
@@ -33,12 +45,14 @@ export interface Claim {
   /** True when the claim was already in their written passage, so it evidences nothing. */
   recycled: boolean
   /**
-   * Which passage of the source this claim was checked against.
+   * Which window of retrieved text this claim was checked against — an index into the
+   * `Window[]` produced by `windowsOf` for the SAME array of readings used at check time.
    *
    * Kept because it is free and it is what makes a class report possible. Claims checked
-   * against the same passage are about the same part of the paper, so grouping by this
-   * index clusters thirty conversations by topic without a single extra model call and
-   * without anybody having to name the topics in advance.
+   * against the same window are about the same part of the same reading, so grouping by
+   * this index clusters thirty conversations by topic without a single extra model call
+   * and without anybody having to name the topics in advance. Resolving it back to a
+   * reading and an excerpt is `windows[passage]` — see `windowsOf`.
    */
   passage: number
 }
@@ -66,32 +80,52 @@ const STOP = new Set(
 const words = (text: string): string[] => text.toLowerCase().match(/[a-z0-9'-]+/g) ?? []
 const content = (text: string): string[] => words(text).filter((w) => !STOP.has(w) && w.length > 2)
 
-/** Overlapping windows, so a sentence straddling a boundary still lands whole in one. */
-export function windowsOf(source: string, size = 110, stride = 45): string[] {
-  const all = source.split(/\s+/).filter(Boolean)
-  if (all.length <= size) return [all.join(' ')]
-  const out: string[] = []
-  for (let i = 0; i < all.length; i += stride) {
-    out.push(all.slice(i, i + size).join(' '))
-    if (i + size >= all.length) break
-  }
+/** One overlapping slice of one reading, tagged with which reading it came from. */
+export interface Window {
+  text: string
+  /** Index into the `SourceDoc[]` passed to `windowsOf`. */
+  doc: number
+}
+
+/**
+ * Overlapping windows across every reading, each tagged with its source.
+ *
+ * One flat array rather than one per document: a claim's `passage` is a single index into
+ * this array regardless of how many readings there are, so nothing downstream — scoring,
+ * the class report — needs to know document count changed. Windows never span a document
+ * boundary, so a claim's evidence is never half of one reading and half of another.
+ */
+export function windowsOf(docs: SourceDoc[], size = 110, stride = 45): Window[] {
+  const out: Window[] = []
+  docs.forEach((doc, index) => {
+    const all = doc.text.split(/\s+/).filter(Boolean)
+    if (all.length <= size) {
+      out.push({ text: all.join(' '), doc: index })
+      return
+    }
+    for (let i = 0; i < all.length; i += stride) {
+      out.push({ text: all.slice(i, i + size).join(' '), doc: index })
+      if (i + size >= all.length) break
+    }
+  })
   return out
 }
 
 /**
- * The single passage that best bears on a claim, as an index, or -1 when none does.
+ * The single window that best bears on a claim, as an index, or -1 when none does.
  *
- * Recorded per claim because grouping by it is what makes a class report possible:
- * claims checked against the same passage are about the same part of the paper, so thirty
- * conversations cluster by topic for free, with nobody having to name the topics first.
+ * Searches across every reading at once. Which reading a claim concerns falls out of this
+ * the same way it always did within one document — by which words the claim shares with
+ * the passage — so a claim about the second reading is not compared against the first
+ * just because that is the one most students happened to write about.
  */
-export function passageFor(claim: string, windows: string[]): number {
+export function passageFor(claim: string, windows: Window[]): number {
   const want = new Set(content(claim))
   if (!want.size || !windows.length) return -1
   let best = -1
   let bestScore = 0
-  windows.forEach((text, i) => {
-    const have = new Set(content(text))
+  windows.forEach((window, i) => {
+    const have = new Set(content(window.text))
     let hit = 0
     for (const term of want) if (have.has(term)) hit += 1
     const score = hit / want.size
@@ -104,25 +138,31 @@ export function passageFor(claim: string, windows: string[]): number {
 }
 
 /**
- * The passages most likely to bear on a claim, by share of the claim's content words.
+ * The passages most likely to bear on a claim, by share of the claim's content words,
+ * each labelled with which reading it came from.
  *
  * Deliberately not an embedding model. This runs in the tab with no download and no
  * network, and for checking whether a specific assertion appears in a specific paper,
- * sharing rare words with it is most of the signal.
+ * sharing rare words with it is most of the signal. The label matters once there is more
+ * than one reading: the checker needs to know it is looking at reading three, not reading
+ * one, or "the passage does not say this" becomes ambiguous about which passage.
  */
-export function evidenceFor(claim: string, windows: string[], take = 3): string {
+export function evidenceFor(claim: string, windows: Window[], docs: SourceDoc[], take = 3): string {
   const want = new Set(content(claim))
-  if (!want.size || !windows.length) return windows.slice(0, take).join('\n\n')
+  const label = (w: Window) => docs[w.doc]?.name ?? `reading ${w.doc + 1}`
+  if (!want.size || !windows.length) {
+    return windows.slice(0, take).map((w) => `[${label(w)}]\n${w.text}`).join('\n\n')
+  }
   return windows
-    .map((text) => {
-      const have = new Set(content(text))
+    .map((w) => {
+      const have = new Set(content(w.text))
       let hit = 0
       for (const term of want) if (have.has(term)) hit += 1
-      return { text, score: hit / want.size }
+      return { w, score: hit / want.size }
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, take)
-    .map((w) => w.text)
+    .map(({ w }) => `[${label(w)}]\n${w.text}`)
     .join('\n\n— — —\n\n')
 }
 
@@ -220,14 +260,23 @@ export function readVerdicts(value: unknown, n: number): Support[] {
   return out
 }
 
-/** Same leniency for the extraction step, which has the same habit. */
-export function readClaims(value: unknown, limit = 12): string[] {
+/**
+ * Pull a list of strings out of whatever shape the model chose.
+ *
+ * Asked for {"claims":["...","..."]} it sometimes returns
+ * {"claims":[{"claim":"...","word_count":16}]} instead — the same content with extra
+ * bookkeeping it decided would be helpful. A parser that insists on strings silently
+ * discards all of them, which has previously removed a whole persona from an experiment
+ * without a single error being raised. Take the string if it is one, and the obvious
+ * field if it is not.
+ */
+export function readStrings(value: unknown, limit = 12, minLength = 8): string[] {
   if (!Array.isArray(value)) return []
   return value
     .map((item) => {
       if (typeof item === 'string') return item
       if (item && typeof item === 'object') {
-        for (const key of ['claim', 'text', 'content']) {
+        for (const key of ['claim', 'topic', 'text', 'content', 'value']) {
           const found = (item as Record<string, unknown>)[key]
           if (typeof found === 'string') return found
         }
@@ -235,6 +284,9 @@ export function readClaims(value: unknown, limit = 12): string[] {
       return ''
     })
     .map((t) => t.trim())
-    .filter((t) => t.length > 8)
+    .filter((t) => t.length > minLength)
     .slice(0, limit)
 }
+
+/** Kept as the name most call sites already use; identical to `readStrings`. */
+export const readClaims = readStrings

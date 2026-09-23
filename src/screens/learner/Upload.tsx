@@ -23,7 +23,7 @@ export function Upload({
   onBack,
   intro,
   kind = 'own-work',
-  source,
+  sources,
   skipPaths = false,
 }: {
   brain: Brain | null
@@ -33,8 +33,8 @@ export function Upload({
   intro?: string
   /** 'reading' stops the examiner addressing them as the author of something they only read. */
   kind?: DocumentKind
-  /** When given, questions are anchored to this upload and answerable only from the source. */
-  source?: Source
+  /** When given, questions are anchored to this upload and answerable only from these. */
+  sources?: Source[]
   /** Take the text and stop. Used for the reading, which is the source, not the subject. */
   skipPaths?: boolean
 }) {
@@ -66,7 +66,7 @@ export function Upload({
       return
     }
 
-    const paths = await brain.buildPaths(documentName, text, { kind, source })
+    const paths = await brain.buildPaths(documentName, text, { kind, sources })
     setStep(2)
     if (!paths) {
       setProblem('The examiner could not write angles for that. Check the key under Examiner, or try a shorter document.')

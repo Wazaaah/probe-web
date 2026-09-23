@@ -25,7 +25,8 @@
  */
 
 import type { Answer } from '../data/types'
-import type { Grade } from './claims'
+import type { Grade, SourceDoc } from './claims'
+import type { DocIndex } from './documents'
 
 export interface TrialTurn {
   /** Which question in the script this belongs to, so probes group with their parent. */
@@ -63,7 +64,8 @@ export interface TrialSession {
   preparation: Preparation
   /** Self-reported before starting, and never shown to the examiner. */
   authorship: Authorship
-  document: string
+  /** Names of the readings on the list when this session ran — for display, not grading. */
+  documents: string[]
   startedAt: number
   endedAt: number
   turns: TrialTurn[]
@@ -242,52 +244,77 @@ export function signalsFor(turns: TrialTurn[], document: string, work = ''): Tri
   }
 }
 
-/* -- the two texts a session is measured against ------------------------- */
+/* -- the readings, and what this participant wrote against them ---------- */
 
 /**
- * The reading, and what this participant wrote about it.
+ * The reading list, and what this participant wrote about it.
  *
- * Two texts because the question Probe asks is whether someone's claims survive contact
- * with the source, and the measures below only mean anything if they can tell the two
- * apart. New detail that turns up in the reading is recall; the same detail lifted from
- * their own paragraph is restatement, and a sentence read back off the reading is neither.
+ * Was one text; is now several, because a reading list is rarely one document and
+ * treating it as one meant the second, third and tenth reading were simply not there. The
+ * measures below only mean anything if recall and restatement can be told apart: new
+ * detail that turns up in ANY reading is recall, the same detail lifted from their own
+ * paragraph is restatement, and a sentence read back off a reading is neither — so for the
+ * lexical checks in `signalsFor`, which only ask "does this echo the readings", every
+ * reading's text is concatenated into one string. Grading and the class report need to
+ * know WHICH reading a claim concerns, so they take the array directly — see `readingDocs`.
  *
- * The reading persists across participants — one text, five people. Their work is
- * replaced each time somebody new sits down.
+ * The list persists across participants — one set of readings, five people. Their own
+ * work is replaced each time somebody new sits down.
  *
  * Held here rather than in the store because the store is published over the pairing link
- * and a whole document does not belong on a 4KB pub/sub channel.
+ * and a whole reading list does not belong on a 4KB pub/sub channel.
  */
-const SOURCE = 'probe.trial.source'
+const SOURCES = 'probe.trial.sources'
 
-let sourceText = (() => {
+let sourceDocs: SourceDoc[] = (() => {
   try {
-    return localStorage.getItem(SOURCE) ?? ''
+    const raw = localStorage.getItem(SOURCES)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? (parsed as SourceDoc[]) : []
   } catch {
-    return ''
+    return []
   }
 })()
 let workText = ''
+/** Built once per reading list; cleared whenever the list changes so it is rebuilt rather
+ *  than silently going stale against readings it never saw. */
+let index: DocIndex | null = null
 
-export function rememberSource(text: string): void {
-  sourceText = text
+export function rememberSources(docs: SourceDoc[]): void {
+  sourceDocs = docs
+  index = null
   try {
-    localStorage.setItem(SOURCE, text)
+    localStorage.setItem(SOURCES, JSON.stringify(docs))
   } catch {
     /* too big for storage, or blocked: it still works for this tab's lifetime */
   }
+}
+
+/** Add one reading to the list, keeping whatever index entries still apply. */
+export function addSource(doc: SourceDoc): void {
+  rememberSources([...sourceDocs.filter((d) => d.name !== doc.name), doc])
+}
+
+export function removeSource(name: string): void {
+  rememberSources(sourceDocs.filter((d) => d.name !== name))
 }
 
 export function rememberWork(text: string): void {
   workText = text
 }
 
-export const readingText = (): string => sourceText
+export function rememberIndex(built: DocIndex): void {
+  index = built
+}
+
+export const readingDocs = (): SourceDoc[] => sourceDocs
+export const readingText = (): string => sourceDocs.map((d) => d.text).join('\n\n')
+export const readingIndex = (): DocIndex | null => index
 export const workingText = (): string => workText
 
 /** Kept so the ordinary (non-trial) upload path has somewhere to put its one document. */
 export function rememberDocument(text: string): void {
-  sourceText = text
+  sourceDocs = [{ name: 'Document', text }]
 }
 
 /* -- the recorder -------------------------------------------------------- */
@@ -341,15 +368,19 @@ class Recorder {
   private askedAt = 0
   private startedAt = 0
   private firstWordAt = 0
-  private document = ''
+  /** Every reading's text, concatenated — enough for the lexical echo checks below,
+   *  which only ask whether an answer echoes ANY of the readings, not which one. */
+  private documentText = ''
+  private documentNames: string[] = []
   private work = ''
 
-  begin(document = sourceText, work = workText): void {
+  begin(docs: SourceDoc[] = sourceDocs, work = workText): void {
     this.turns = []
     this.startedAt = Date.now()
     this.askedAt = 0
     this.firstWordAt = 0
-    this.document = document
+    this.documentText = docs.map((d) => d.text).join('\n\n')
+    this.documentNames = docs.map((d) => d.name)
     this.work = work
   }
 
@@ -388,14 +419,14 @@ class Recorder {
       participant: setup.participant,
       preparation: setup.preparation,
       authorship: setup.authorship ?? 'unsaid',
-      document: this.document.slice(0, 200),
+      documents: this.documentNames,
       startedAt: this.startedAt,
       endedAt: Date.now(),
       turns: this.turns,
       answers,
       score,
       grade,
-      signals: signalsFor(this.turns, this.document, this.work),
+      signals: signalsFor(this.turns, this.documentText, this.work),
       note: '',
     }
     keep(session)

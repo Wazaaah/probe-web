@@ -1,4 +1,4 @@
-import type { Grade } from './claims'
+import type { Grade, SourceDoc } from './claims'
 import { windowsOf } from './claims'
 
 /**
@@ -81,7 +81,9 @@ export function boundaryLine(b: Boundary): string {
 
 export interface TopicPattern {
   passage: number
-  /** The opening of that passage, so a lecturer can see which part of the paper it is. */
+  /** Which reading this passage came from — its name, for display. */
+  docName: string
+  /** The opening of that passage, so a lecturer can see which part of the reading it is. */
   excerpt: string
   /** How many students held at least one claim checked against this passage. */
   held: number
@@ -122,10 +124,10 @@ function similar(a: string, b: string): boolean {
  */
 export function classReport(
   sessions: { participant: string; grade: Grade | null }[],
-  source: string,
+  docs: SourceDoc[],
 ): ClassReport {
   const usable = sessions.filter((s) => s.grade?.claims?.length)
-  const windows = windowsOf(source)
+  const windows = windowsOf(docs)
   if (!usable.length) return { students: 0, topics: [], shared: [] }
 
   const touched = new Map<number, { held: Set<string>; missed: Set<string> }>()
@@ -140,15 +142,19 @@ export function classReport(
   }
 
   const topics: TopicPattern[] = [...touched.entries()]
-    .map(([passage, row]) => ({
-      passage,
-      excerpt: (windows[passage] ?? '').split(/\s+/).slice(0, 18).join(' '),
-      held: row.held.size,
-      // Someone who held a claim here is not also counted as having missed it.
-      missed: [...row.missed].filter((p) => !row.held.has(p)).length,
-      silent: usable.length - new Set([...row.held, ...row.missed]).size,
-    }))
-    // A passage index that no longer resolves — the reading was changed after the
+    .map(([passage, row]) => {
+      const window = windows[passage]
+      return {
+        passage,
+        docName: window ? (docs[window.doc]?.name ?? '') : '',
+        excerpt: (window?.text ?? '').split(/\s+/).slice(0, 18).join(' '),
+        held: row.held.size,
+        // Someone who held a claim here is not also counted as having missed it.
+        missed: [...row.missed].filter((p) => !row.held.has(p)).length,
+        silent: usable.length - new Set([...row.held, ...row.missed]).size,
+      }
+    })
+    // A passage index that no longer resolves — the reading list changed after the
     // examination, say — has nothing to show a lecturer and is dropped rather than
     // rendered as an empty quotation.
     .filter((t) => t.excerpt.trim().length > 0)
@@ -186,7 +192,7 @@ export function classReportText(report: ClassReport): string {
   lines.push('WHERE THE CLASS IS THINNEST')
   for (const topic of report.topics.slice(0, 6)) {
     lines.push(
-      `  ${String(topic.held).padStart(2)} of ${report.students} held it · ${topic.missed} tried and missed · ${topic.silent} silent`,
+      `  ${String(topic.held).padStart(2)} of ${report.students} held it · ${topic.missed} tried and missed · ${topic.silent} silent  [${topic.docName}]`,
     )
     lines.push(`     "${topic.excerpt}…"`)
   }

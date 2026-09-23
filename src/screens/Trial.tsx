@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
 import { TopBar } from '../components/ui'
+import { UnreadableFile, readDocument } from '../lib/doc'
 import {
   annotate,
   clearSessions,
   exportSessions,
   loadSessions,
+  readingDocs,
   saveSetup,
   trialSetup,
   type Authorship,
@@ -13,7 +15,6 @@ import {
   type TrialSetup,
 } from '../lib/trial'
 import { boundaryLine, boundaryOf, classReport } from '../lib/report'
-import { readingText } from '../lib/trial'
 
 /**
  * The console for running a few people through the same reading.
@@ -56,7 +57,7 @@ export function Trial({
   onLeave,
   onReview,
   onBegin,
-  readingName = '',
+  readingNames = [],
   error = '',
   onChangeReading,
   onChangeBrain,
@@ -65,7 +66,7 @@ export function Trial({
   onReview: () => void
   /** Present only in the trial build, where the console also starts the session. */
   onBegin?: (work: string) => void
-  readingName?: string
+  readingNames?: string[]
   error?: string
   onChangeReading?: () => void
   onChangeBrain?: () => void
@@ -78,6 +79,23 @@ export function Trial({
   const [note, setNote] = useState('')
   const [work, setWork] = useState('')
   const [armed, setArmed] = useState(Boolean(existing?.participant))
+  const [reading, setReading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const readingLabel = readingNames.length <= 1 ? readingNames[0] || 'the reading' : `the ${readingNames.length} readings`
+
+  const takeFile = async (file: File) => {
+    setUploadError('')
+    setReading(true)
+    try {
+      setWork(await readDocument(file))
+    } catch (err) {
+      setUploadError(err instanceof UnreadableFile ? err.message : 'That file could not be read in the browser.')
+    } finally {
+      setReading(false)
+    }
+  }
 
   const words = work.trim() ? work.trim().split(/\s+/).length : 0
   const ready = Boolean(participant.trim()) && preparation !== 'unsaid' && authorship !== 'unsaid' && words >= 40
@@ -201,15 +219,41 @@ export function Trial({
             <div className="stack gap-4" style={{ marginTop: 24 }}>
               <p className="body-med">What they wrote about it</p>
               <p className="meta dim">
-                Paste their passage on {readingName || 'the reading'}. The questions come from
-                this, and can only be answered out of the reading — which is the point.
+                Their passage on {readingLabel}. Upload it or paste it — the questions come
+                from this, and can only be answered out of the reading, which is the point.
               </p>
             </div>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) void takeFile(file)
+              }}
+            />
+            <button
+              className="btn quiet"
+              onClick={() => fileRef.current?.click()}
+              disabled={reading}
+              style={{ marginTop: 10 }}
+            >
+              {reading ? 'Reading…' : work ? 'Upload a different file' : 'Upload their passage'}
+            </button>
+            {uploadError && (
+              <p className="meta" style={{ marginTop: 6, color: 'var(--alarm, inherit)' }}>
+                {uploadError}
+              </p>
+            )}
+
             <textarea
               className="field"
               value={work}
               rows={6}
-              placeholder="Their paragraph about the reading…"
+              placeholder="Or paste their paragraph about the reading here…"
               onChange={(event) => setWork(event.target.value)}
               style={{ marginTop: 10 }}
             />
@@ -350,7 +394,7 @@ export function Trial({
                   </p>
                 </div>
                 {(() => {
-                  const report = classReport(sessions, readingText())
+                  const report = classReport(sessions, readingDocs())
                   if (!report.students) {
                     return (
                       <p className="meta dim" style={{ marginTop: 10 }}>
@@ -376,7 +420,9 @@ export function Trial({
                       )}
 
                       <div className="card flat" style={{ alignItems: 'flex-start', gap: 8 }}>
-                        <span className="card-title">Thinnest parts of the reading</span>
+                        <span className="card-title">
+                          Thinnest parts of the reading{readingNames.length > 1 ? 's' : ''}
+                        </span>
                         {report.topics.slice(0, 4).map((topic) => (
                           <span key={topic.passage} className="stack gap-4" style={{ width: '100%' }}>
                             <span className="meta">
@@ -384,6 +430,7 @@ export function Trial({
                               reading bears out
                               {topic.missed > 0 && ` · ${topic.missed} tried and missed`}
                               {topic.silent > 0 && ` · ${topic.silent} never went near it`}
+                              {readingNames.length > 1 && topic.docName && ` — ${topic.docName}`}
                             </span>
                             <span className="micro dimmer">“{topic.excerpt}…”</span>
                           </span>

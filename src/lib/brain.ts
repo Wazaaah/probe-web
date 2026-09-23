@@ -12,8 +12,10 @@ import {
   scoreClaims,
   windowsOf,
   type Grade,
+  type SourceDoc,
 } from './claims'
 import { COMPARER, comparePrompt, readWinner } from './ranking'
+import { TOPIC_EXTRACTOR, indexSummary, readTopics, relevantDocs, topicPrompt, type DocIndex } from './documents'
 
 /**
  * Whoever judges the answers.
@@ -154,14 +156,11 @@ function spread(text: string, budget = PROMPT_BUDGET): string {
  */
 export type DocumentKind = 'own-work' | 'reading'
 
-/** The reading a piece of work is answerable to. */
-export interface Source {
-  name: string
-  text: string
-}
+/** The reading, or readings, a piece of work is answerable to. */
+export type { SourceDoc as Source } from './claims'
 
 /**
- * Questions about what someone wrote, answerable to the reading they wrote it about.
+ * Questions about what someone wrote, answerable to the reading(s) they wrote it about.
  *
  * This is the case Probe is actually for, and it is the only one where the interesting
  * failure lives. A student who read the source and a student whose paragraph was written
@@ -170,20 +169,30 @@ export interface Source {
  * anchored at both ends — pointed at something THEY wrote, and answerable only out of the
  * reading — because a question anchored at only one end can be met from the other.
  *
- * The budget is split rather than doubled. Their work is short and every word of it may
- * matter; the reading is long and is being sampled anyway.
+ * With more than a couple of readings, dumping all of them into the prompt stops being
+ * possible — ten readings do not fit a context window and should not have to. Two things
+ * happen instead. `relevantDocs` picks out, by shared vocabulary with the passage, the one
+ * or two readings the student's paragraph is actually about, and those go in full. Every
+ * OTHER reading is represented only by its one-line topic summary from the index, so the
+ * examiner can still ask a question that reaches across readings — "the first paper says
+ * X; does this one agree?" — without every reading's full text competing for the budget.
  */
-function groundedPrompt(text: string, source: Source): string {
+function groundedPrompt(text: string, docs: SourceDoc[], index: DocIndex | null): string {
+  const focus = relevantDocs(text, docs, 2)
+  const rest = docs.filter((d) => !focus.includes(d))
+  const others = index?.filter((entry) => rest.some((d) => d.name === entry.doc.name))
+
   return `You design oral examinations.
 
-A student was set a reading and wrote the passage below about it. Find out whether they
-engaged with the reading or produced something plausible-sounding without it.
+A student was set ${docs.length > 1 ? 'a set of readings' : 'a reading'} and wrote the passage below about it. Find out whether they
+engaged with ${docs.length > 1 ? 'the readings' : 'the reading'} or produced something plausible-sounding without ${docs.length > 1 ? 'them' : 'it'}.
 
 Write four angles, each a different way of testing that:
 1. Where did this claim come from — take a specific thing they assert and ask what in the reading supports it
 2. What the reading actually says — a place their account and the source come apart
 3. What they left out — something the reading argues that their passage needed and skipped
 4. Push back using the reading — make them defend their line against the source's own words
+${docs.length > 1 ? '\nWhere it is genuinely relevant, a question may ask how two of the readings relate — but only using what the topic summaries below actually say, never inventing a connection between them.' : ''}
 
 Rules, all of them load-bearing:
 - Each question must be PROMPTED BY something the student wrote, but must not announce it.
@@ -195,17 +204,18 @@ Rules, all of them load-bearing:
 - Quote their words only where a real contradiction has to be put to them, and at most
   once in the whole set: "Your account has it starting in 2011 — the paper dates it
   differently. Which is right?"
-- Every question must be answerable only by someone who read the SOURCE. If it can be
+- Every question must be answerable only by someone who read the reading(s). If it can be
   answered from their own passage alone, it is useless here.
-- Never invent a figure, date, finding or quotation. If the source does not contain it, it
-  does not exist.
+- Never invent a figure, date, finding or quotation. If a reading does not contain it, it
+  does not exist — this applies just as much to the topic summaries below as to the full
+  text; a summary line is not licence to assert something more specific than it says.
 - Answerable out loud in under a minute. No yes/no questions.
 
 THE STUDENT'S PASSAGE
 ${spread(text, 6000)}
 
-THE READING (${source.name})
-${spread(source.text, 14000)}
+${focus.map((d) => `THE READING (${d.name})\n${spread(d.text, docs.length > 1 ? 8000 : 14000)}`).join('\n\n')}
+${others?.length ? `\nOTHER READINGS ON THE LIST (topic summaries only — full text not shown)\n${indexSummary(others)}` : ''}
 
 Reply with JSON only:
 {"paths":[{"name":"","description":"","difficulty":"Gentle|Moderate|Hard","minutes":0,"opener":"the first question in quotes","script":[{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}]}]}
@@ -348,16 +358,23 @@ export interface Brain {
   summarise(path: QuestionPath, answers: Answer[]): Promise<Summary | null>
   /**
    * Score by counting checked claims rather than by asking for a verdict.
-   * Null when there is no source to check against, which is most ordinary use.
+   * Null when there are no readings to check against, which is most ordinary use.
    */
-  grade(answers: Answer[], source: string, work: string): Promise<Grade | null>
+  grade(answers: Answer[], docs: SourceDoc[], work: string): Promise<Grade | null>
   /**
    * Which of two transcripts shows more evidence of having read the source.
    * Returns null when the reply could not be read, so the caller can record a tie rather
    * than invent a winner.
    */
   compare(left: string, right: string): Promise<'A' | 'B' | null>
-  buildPaths(name: string, text: string, opts?: { kind?: DocumentKind; source?: Source }): Promise<QuestionPath[] | null>
+  buildPaths(name: string, text: string, opts?: { kind?: DocumentKind; sources?: SourceDoc[]; index?: DocIndex | null }): Promise<QuestionPath[] | null>
+  /**
+   * One line per reading on what it covers, built once when readings are uploaded.
+   *
+   * Not a graph — see documents.ts for why. Skips any reading that already has an entry,
+   * so adding one more reading to a list of ten does not re-summarise the other nine.
+   */
+  indexDocuments(docs: SourceDoc[], existing?: DocIndex): Promise<DocIndex>
   check(): Promise<string>
 }
 
@@ -389,18 +406,21 @@ export function makeBrain(config: BrainConfig): Brain | null {
       return readWinner(json?.winner)
     },
 
-    async grade(answers, source, work) {
-      if (!answers.length || !source.trim()) return null
+    async grade(answers, docs, work) {
+      const usable = docs.filter((d) => d.text.trim())
+      if (!answers.length || !usable.length) return null
 
       const extracted = await quiet(EXTRACTOR, extractPrompt(answers), 1600)
       const claims = readClaims(extracted?.claims)
       if (!claims.length) return scoreClaims([])
 
-      // Retrieval happens here, in the tab. Each claim is checked against the passage
-      // that bears on it, not against the whole paper — a model asked to find one
-      // sentence in six thousand words tends to lose it.
-      const windows = windowsOf(source)
-      const items = claims.map((claim) => ({ claim, evidence: evidenceFor(claim, windows) }))
+      // Retrieval happens here, in the tab, across every reading at once. Each claim is
+      // checked against the passage that bears on it — not against the whole paper, which
+      // loses a single sentence in six thousand words, and not against only the reading
+      // the student wrote about most, which would let a claim about reading four hide
+      // behind reading one just because more students discussed reading one.
+      const windows = windowsOf(usable)
+      const items = claims.map((claim) => ({ claim, evidence: evidenceFor(claim, windows, usable) }))
 
       const checked = await quiet(CHECKER, checkPrompt(items), 2000)
       const verdicts = readVerdicts(checked?.verdicts, claims.length)
@@ -438,7 +458,12 @@ export function makeBrain(config: BrainConfig): Brain | null {
     },
 
     async buildPaths(name, text, opts = {}) {
-      const json = await quiet('You reply with JSON only.', opts.source ? groundedPrompt(text, opts.source) : pathsPrompt(name, text, opts.kind ?? 'own-work'), 8000)
+      const docs = opts.sources?.filter((d) => d.text.trim())
+      const json = await quiet(
+        'You reply with JSON only.',
+        docs?.length ? groundedPrompt(text, docs, opts.index ?? null) : pathsPrompt(name, text, opts.kind ?? 'own-work'),
+        8000,
+      )
       if (!json || !Array.isArray(json.paths)) return null
       const paths: QuestionPath[] = json.paths
         .filter((p: any) => p && Array.isArray(p.script) && p.script.length > 0)
@@ -467,6 +492,21 @@ export function makeBrain(config: BrainConfig): Brain | null {
         }))
         .filter((p: QuestionPath) => p.script.length > 0)
       return paths.length > 0 ? paths : null
+    },
+
+    async indexDocuments(docs, existing = []) {
+      const done = new Set(existing.map((e) => e.doc.name))
+      // One call per new reading, concurrently — topic extraction on one reading does not
+      // depend on another, and waiting for ten of them in series is ten times the wait.
+      const built = await Promise.all(
+        docs
+          .filter((d) => d.text.trim() && !done.has(d.name))
+          .map(async (doc) => {
+            const json = await quiet(TOPIC_EXTRACTOR, topicPrompt(doc), 800)
+            return { doc, topics: readTopics(json?.topics) }
+          }),
+      )
+      return [...existing, ...built]
     },
 
     /**

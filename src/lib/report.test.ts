@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Claim, Grade } from './claims'
+import { windowsOf, type Claim, type Grade, type SourceDoc } from './claims'
 import { boundaryLine, boundaryOf, classReport, classReportText } from './report'
 
 /**
@@ -17,7 +17,10 @@ const claim = (text: string, support: Claim['support'], passage = 0, recycled = 
 
 const grade = (claims: Claim[]): Grade => ({ claims, precision: 0, fresh: 0, score: 0 })
 
-const SOURCE = Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ')
+const READING: SourceDoc = { name: 'The Reading', text: Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ') }
+const DOCS = [READING]
+
+const SECOND: SourceDoc = { name: 'Second Reading', text: Array.from({ length: 400 }, (_, i) => `alt${i}`).join(' ') }
 
 describe('boundaryOf', () => {
   it('sorts claims into what was held, missed, contradicted and merely restated', () => {
@@ -74,14 +77,14 @@ describe('classReport', () => {
   ]
 
   it('counts students, not claims', () => {
-    const r = classReport(sessions, SOURCE)
+    const r = classReport(sessions, DOCS)
     expect(r.students).toBe(3)
     const topic = r.topics.find((t) => t.passage === 1)
     expect(topic?.held).toBe(3)
   })
 
   it('puts the thinnest topic first, because that is what the lecturer is asking for', () => {
-    const r = classReport(sessions, SOURCE)
+    const r = classReport(sessions, DOCS)
     // Passage 4: one student held it, two missed. Passage 1: all three held it.
     expect(r.topics[0].passage).toBe(4)
     expect(r.topics[0].held).toBe(1)
@@ -92,13 +95,13 @@ describe('classReport', () => {
     const mixed = [
       { participant: 'P1', grade: grade([claim('right thing', 'supported', 2), claim('wrong thing', 'absent', 2)]) },
     ]
-    const topic = classReport(mixed, SOURCE).topics.find((t) => t.passage === 2)
+    const topic = classReport(mixed, DOCS).topics.find((t) => t.passage === 2)
     expect(topic?.held).toBe(1)
     expect(topic?.missed).toBe(0)
   })
 
   it('surfaces a wrong claim several students made in common', () => {
-    const r = classReport(sessions, SOURCE)
+    const r = classReport(sessions, DOCS)
     expect(r.shared).toHaveLength(1)
     expect(r.shared[0].students).toBe(2)
     expect(r.shared[0].text).toMatch(/randomised/)
@@ -106,23 +109,33 @@ describe('classReport', () => {
 
   it('does not surface a wrong claim only one student made', () => {
     const one = [{ participant: 'P1', grade: grade([claim('a lonely error', 'absent', 1)]) }]
-    expect(classReport(one, SOURCE).shared).toEqual([])
+    expect(classReport(one, DOCS).shared).toEqual([])
   })
 
   it('never names an individual in the rolled-up output', () => {
-    const text = classReportText(classReport(sessions, SOURCE))
+    const text = classReportText(classReport(sessions, DOCS))
     expect(text).not.toMatch(/\bP[123]\b/)
   })
 
   it('drops a topic whose passage no longer resolves, rather than quoting nothing', () => {
     // The reading was replaced after the examination, so passage 99 has no text behind it.
     const stale = [{ participant: 'P1', grade: grade([claim('something', 'supported', 99)]) }]
-    expect(classReport(stale, SOURCE).topics).toEqual([])
+    expect(classReport(stale, DOCS).topics).toEqual([])
   })
 
   it('handles a class where nobody said anything checkable', () => {
-    const r = classReport([{ participant: 'P1', grade: null }], SOURCE)
+    const r = classReport([{ participant: 'P1', grade: null }], DOCS)
     expect(r.students).toBe(0)
     expect(classReportText(r)).toMatch(/No examinations/)
+  })
+
+  it('names the right reading on a topic when there is more than one', () => {
+    // windowsOf([READING, SECOND]) puts SECOND's windows after READING's, so a passage
+    // index has to resolve back to SECOND, not silently fall back to the first reading.
+    const windows = windowsOf([READING, SECOND])
+    const secondIndex = windows.findIndex((w) => w.doc === 1)
+    const many = [{ participant: 'P1', grade: grade([claim('about the second one', 'supported', secondIndex)]) }]
+    const topic = classReport(many, [READING, SECOND]).topics.find((t) => t.passage === secondIndex)
+    expect(topic?.docName).toBe('Second Reading')
   })
 })
