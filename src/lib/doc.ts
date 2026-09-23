@@ -19,6 +19,17 @@ async function pdfjs() {
 }
 
 /**
+ * Same reasoning for Word documents: fetched only when one is actually uploaded. Word is
+ * the one format everyone actually writes an essay in, and until this a .docx just failed
+ * silently into a rejection the accept filter made worse — a browser's native file picker
+ * hides files that do not match `accept`, so someone trying to pick a Word file could not
+ * even select it, which reads as nothing happening at all rather than as an error.
+ */
+async function mammoth() {
+  return import('mammoth')
+}
+
+/**
  * A ceiling on pages, but a generous one, and it is reported rather than hidden.
  *
  * The old limit of 40 was set on the assumption that the first pages carry the substance.
@@ -106,6 +117,30 @@ function plainify(raw: string, extension: string): string {
     .trim()
 }
 
+/**
+ * A .docx is a zip of XML, not text, so it needs a real parser — Word is what most people
+ * actually write an essay in, and this used to fail with no useful explanation.
+ *
+ * Only the modern format (.docx, 2007 onward) is readable this way. The old binary .doc
+ * format is a different thing entirely and mammoth cannot open it; that case gets its own
+ * message rather than the generic one, because "convert it first" is an actionable answer
+ * and "could not be read" is not.
+ */
+async function readWord(file: File): Promise<string> {
+  const { extractRawText } = await mammoth()
+  const { value, messages } = await extractRawText({ arrayBuffer: await file.arrayBuffer() })
+  const text = value.trim()
+  if (!text) {
+    const reason = messages.find((m) => m.type === 'error')?.message
+    throw new UnreadableFile(
+      reason
+        ? `That Word document could not be read: ${reason}`
+        : 'That Word document has no text in it — paste the text instead.',
+    )
+  }
+  return text
+}
+
 export async function readDocument(file: File, onProgress?: (done: number, total: number) => void): Promise<string> {
   const extension = extensionOf(file.name)
 
@@ -118,12 +153,25 @@ export async function readDocument(file: File, onProgress?: (done: number, total
     return text
   }
 
+  if (extension === 'docx' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    onProgress?.(1, 1)
+    return readWord(file)
+  }
+
+  if (extension === 'doc') {
+    // The old binary format, not the zip-of-XML one — a different problem from "we do
+    // not support this yet", so it gets a different, actionable answer.
+    throw new UnreadableFile(
+      'That is the older .doc format, which cannot be read in the browser. Save it as .docx (or PDF) from Word, or paste the text in.',
+    )
+  }
+
   if (PLAIN.includes(extension) || file.type.startsWith('text/')) {
     onProgress?.(1, 1)
     return plainify(await file.text(), extension)
   }
 
   throw new UnreadableFile(
-    `Probe can read PDF and plain text in the browser. ${extension ? '.' + extension : 'That file'} needs pasting in for now.`,
+    `Probe can read PDF, Word (.docx) and plain text in the browser. ${extension ? '.' + extension : 'That file'} needs pasting in for now.`,
   )
 }

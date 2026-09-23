@@ -77,6 +77,18 @@ const wordsIn = (text: string) => (text.match(/\S+/g) ?? []).length
 export function TrialApp({ store }: { store: ProbeStore }) {
   const [docs, setDocs] = useState<SourceDoc[]>(() => readingDocs())
   const [reading, setReading] = useState(false)
+  /**
+   * What is being read right now, and how far it has got.
+   *
+   * A real PDF can take real seconds to extract — pdf.js is reading glyph by glyph,
+   * page by page, and a lecture-length reading has a lot of pages. Earlier this screen
+   * only changed a button's label while that happened, which on a slow file is
+   * indistinguishable from nothing happening at all. This is what fixes that: a live
+   * count, taken straight from the same per-page callback `readDocument` already offers
+   * and which the original single-document uploader used but this one had stopped
+   * passing through.
+   */
+  const [progress, setProgress] = useState<{ name: string; done: number; total: number } | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteName, setPasteName] = useState('')
   const [pasteText, setPasteText] = useState('')
@@ -138,8 +150,9 @@ export function TrialApp({ store }: { store: ProbeStore }) {
   /** Add one file to the reading list. One bad file in a batch must not lose the rest. */
   const addFile = async (file: File) => {
     setReadingError('')
+    setProgress({ name: file.name, done: 0, total: 1 })
     try {
-      const text = await readDocument(file)
+      const text = await readDocument(file, (done, total) => setProgress({ name: file.name, done, total }))
       const doc = { name: file.name, text }
       addSource(doc)
       setDocs(readingDocs())
@@ -147,6 +160,8 @@ export function TrialApp({ store }: { store: ProbeStore }) {
       setReadingError(
         `${file.name}: ${error instanceof UnreadableFile ? error.message : 'could not be read in the browser.'}`,
       )
+    } finally {
+      setProgress(null)
     }
   }
 
@@ -263,7 +278,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
                 ref={fileRef}
                 type="file"
                 multiple
-                accept=".pdf,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf"
+                accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 hidden
                 onChange={(event) => {
                   const files = event.target.files
@@ -280,8 +295,23 @@ export function TrialApp({ store }: { store: ProbeStore }) {
                 <span className="tile lg">
                   <Icon name={reading ? 'spark' : 'upload'} size={22} />
                 </span>
-                <span className="body-med">{reading ? 'Reading…' : docs.length ? 'Add more' : 'Choose files'}</span>
-                <span className="micro dimmer">PDF or plain text — select several at once if you like</span>
+                <span className="body-med">
+                  {progress
+                    ? progress.total > 1
+                      ? `Reading page ${progress.done} of ${progress.total}…`
+                      : `Reading ${progress.name}…`
+                    : docs.length
+                      ? 'Add more'
+                      : 'Choose files'}
+                </span>
+                {progress && progress.total > 1 && (
+                  <span className="track" style={{ width: '100%', maxWidth: 220 }}>
+                    <span style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+                  </span>
+                )}
+                <span className="micro dimmer">
+                  PDF, Word (.docx) or plain text — select several at once if you like
+                </span>
               </button>
               <button className="btn quiet" onClick={() => setPasteOpen(true)}>
                 Paste text instead

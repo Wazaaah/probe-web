@@ -3,7 +3,7 @@
   "version": "2.8.0",
   "private": true,
   "type": "module",
-  "description": "Probe \u2014 a voice examination on the document you have to defend.",
+  "description": "Probe — a voice examination on the document you have to defend.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vitest run && vite build",
@@ -17,6 +17,7 @@
     "build:trial": "vite build --mode trial"
   },
   "dependencies": {
+    "mammoth": "^1.12.3",
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

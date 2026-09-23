@@ -80,6 +80,7 @@ export function Trial({
   const [work, setWork] = useState('')
   const [armed, setArmed] = useState(Boolean(existing?.participant))
   const [reading, setReading] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [uploadError, setUploadError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -88,12 +89,14 @@ export function Trial({
   const takeFile = async (file: File) => {
     setUploadError('')
     setReading(true)
+    setProgress({ done: 0, total: 1 })
     try {
-      setWork(await readDocument(file))
+      setWork(await readDocument(file, (done, total) => setProgress({ done, total })))
     } catch (err) {
       setUploadError(err instanceof UnreadableFile ? err.message : 'That file could not be read in the browser.')
     } finally {
       setReading(false)
+      setProgress(null)
     }
   }
 
@@ -227,7 +230,7 @@ export function Trial({
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf"
+              accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               hidden
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -241,7 +244,13 @@ export function Trial({
               disabled={reading}
               style={{ marginTop: 10 }}
             >
-              {reading ? 'Reading…' : work ? 'Upload a different file' : 'Upload their passage'}
+              {progress && progress.total > 1
+                ? `Reading page ${progress.done} of ${progress.total}…`
+                : reading
+                  ? 'Reading…'
+                  : work
+                    ? 'Upload a different file'
+                    : 'Upload their passage (PDF, Word or text)'}
             </button>
             {uploadError && (
               <p className="meta" style={{ marginTop: 6, color: 'var(--alarm, inherit)' }}>
