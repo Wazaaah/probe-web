@@ -162,7 +162,7 @@ export function RunExam({ store }: { store: ProbeStore }) {
             Run another exam
           </button>
         </div>
-        {downloaded && <span className="pa-meta">Downloaded — distribute it however this course does.</span>}
+        {downloaded && <span className="pa-meta">Downloaded. Distribute it however this course does.</span>}
       </div>
     )
   }
@@ -171,14 +171,14 @@ export function RunExam({ store }: { store: ProbeStore }) {
     <div className="pa-stack pa-gap-20">
       <div className="pa-stack pa-gap-6">
         <h1 className="pa-h1">Run an exam</h1>
-        <p className="pa-lede">One student, sitting down now. Pick the reading their submission answers, then their file.</p>
+        <p className="pa-lede">One student, sitting down now. Pick which reading their submission answers, then upload their file.</p>
       </div>
 
       <div className="pa-card pa-stack pa-gap-16">
         <div className="pa-stack pa-gap-4">
           <span className="pa-h3">Which reading?</span>
           {readings.length === 0 ? (
-            <span className="pa-meta">No readings uploaded yet — add one under Readings first.</span>
+            <span className="pa-meta">No readings uploaded yet. Add one under Readings first.</span>
           ) : (
             <select className="pa-field" value={readingId} onChange={(event) => setReadingId(event.target.value)} style={{ maxWidth: 320 }}>
               {readings.map((r) => (
@@ -192,7 +192,7 @@ export function RunExam({ store }: { store: ProbeStore }) {
 
         <div className="pa-stack pa-gap-4">
           <span className="pa-h3">Their submission</span>
-          <span className="pa-meta">Saved as IndexNumber_First_Last — their name and index number are read straight off it.</span>
+          <span className="pa-meta">Saved as IndexNumber_First_Last. Their name and index number come straight off the filename.</span>
           <label className="pa-dashed" style={{ marginTop: 6 }}>
             <input
               type="file"
@@ -215,7 +215,7 @@ export function RunExam({ store }: { store: ProbeStore }) {
           <div className="pa-notice" style={{ background: 'var(--pa-bg)', color: 'var(--pa-ink)' }}>
             <Icon name="close" size={16} color="var(--pa-warn)" />
             <span className="pa-stack pa-gap-8" style={{ width: '100%' }}>
-              <span>Couldn't read a name and index number off "{file.name}". Enter them by hand.</span>
+              <span>Couldn't find a name and index number in that filename. Enter them by hand.</span>
               <span className="pa-row pa-gap-8">
                 <input className="pa-field" placeholder="Full name" value={manualName} onChange={(e) => setManualName(e.target.value)} />
                 <input className="pa-field" placeholder="Index number" value={manualIndex} onChange={(e) => setManualIndex(e.target.value)} />

@@ -49,7 +49,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'groq',
     label: 'Groq',
-    blurb: 'Free, no card, and by far the fastest — the pause before a follow-up is what makes or breaks this.',
+    blurb: 'Free, no card, and by far the fastest. The pause before a follow-up is what makes or breaks this.',
     free: true,
     defaultModel: 'openai/gpt-oss-120b',
     keysUrl: 'console.groq.com/keys',
@@ -57,7 +57,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'gemini',
     label: 'Gemini',
-    blurb: 'Free from Google AI Studio, no card. A Gemini Pro subscription does not cover this — the API is separate.',
+    blurb: "Free from Google AI Studio, no card. A Gemini Pro subscription doesn't cover this; the API is separate.",
     free: true,
     defaultModel: 'gemini-2.5-flash',
     keysUrl: 'aistudio.google.com/apikey',
@@ -65,7 +65,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'claude',
     label: 'Claude',
-    blurb: 'The sharpest judge. Paid — roughly 20c a session.',
+    blurb: 'The sharpest judge. Paid, roughly 20c a session.',
     free: false,
     defaultModel: 'claude-opus-5',
     keysUrl: 'platform.claude.com/settings/keys',

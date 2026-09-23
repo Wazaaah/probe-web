@@ -20,8 +20,8 @@ export function ClassReport() {
       <div className="pa-stack pa-gap-6">
         <h1 className="pa-h1">Class report</h1>
         <p className="pa-lede">
-          Grouped by which part of the reading each claim was checked against, so the
-          topics come out of the exchanges themselves. Nobody is named.
+          Patterns are grouped by which part of the reading each claim was checked against
+          — so they come from the exchanges, not a guess. Nobody is named.
         </p>
       </div>
 
@@ -46,7 +46,7 @@ export function ClassReport() {
               <span className="pa-h3">Believed by more than one, and not in the reading</span>
               {report.shared.slice(0, 4).map((claim) => (
                 <span key={claim.text} className="pa-meta">
-                  <strong>{claim.students} of {report.students}</strong> — {claim.text}
+                  <strong>{claim.students} of {report.students}</strong>: {claim.text}
                 </span>
               ))}
               <span className="pa-micro">The same wrong idea in several heads usually comes from the teaching rather than the reading.</span>
@@ -61,7 +61,7 @@ export function ClassReport() {
                   <strong>{topic.held} of {report.students}</strong> held it
                   {topic.missed > 0 && ` · ${topic.missed} tried and missed`}
                   {topic.silent > 0 && ` · ${topic.silent} never went near it`}
-                  {' — '}{topic.docName}
+                  {' · '}{topic.docName}
                 </span>
                 <span className="pa-micro">"{topic.excerpt}…"</span>
               </div>

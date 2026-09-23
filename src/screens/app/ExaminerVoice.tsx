@@ -116,7 +116,7 @@ export function ExaminerVoice() {
         </div>
         <span className="pa-micro">
           {pause === DEFAULT_PAUSE ? 'The default.' : `Changed from ${DEFAULT_PAUSE}s.`} Longer is safer
-          for a nervous speaker; shorter keeps a confident one moving.
+          for a nervous speaker. Shorter keeps a confident one moving.
         </span>
       </div>
     </div>

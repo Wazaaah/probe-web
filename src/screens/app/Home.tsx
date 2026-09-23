@@ -47,7 +47,7 @@ export function Home({ go }: { go: (screen: Screen) => void }) {
       <div className="pa-stack pa-gap-10">
         <span className="pa-h3">Recent</span>
         {recent.length === 0 ? (
-          <div className="pa-empty">Nothing yet — run the first exam to see it here.</div>
+          <div className="pa-empty">Nothing yet. Run the first exam to see it here.</div>
         ) : (
           <div className="pa-card pa-list">
             {recent.map((exam) => (

@@ -60,8 +60,8 @@ export function Readings({ store }: { store: ProbeStore }) {
       <div className="pa-stack pa-gap-6">
         <h1 className="pa-h1">Readings</h1>
         <p className="pa-lede">
-          Uploaded as the course reaches them, not all at once. Every week stays here —
-          nothing is retired once its week has passed.
+          Readings are added week by week, not all at once, and none of them are ever
+          removed.
         </p>
       </div>
 
@@ -121,7 +121,7 @@ export function Readings({ store }: { store: ProbeStore }) {
           <span className="pa-body" style={{ fontWeight: 600 }}>
             {progress ? (progress.total > 1 ? `Reading page ${progress.done} of ${progress.total}…` : `Reading ${progress.name}…`) : 'Choose files'}
           </span>
-          <span className="pa-micro">PDF, Word (.docx) or plain text — several at once if you like</span>
+          <span className="pa-micro">PDF, Word (.docx) or plain text. Add several at once if you like.</span>
         </button>
 
         <button className="pa-btn" style={{ alignSelf: 'flex-start' }} disabled={!week.trim() || docs.length === 0 || saving} onClick={() => void addToWeek()}>
