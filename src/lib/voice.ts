@@ -49,10 +49,13 @@ const VOICE_KEY = 'probe.voice.name'
  */
 export const DEFAULT_PAUSE = 2.5
 
+/** However long a nervous speaker in an unfamiliar room might reasonably need. */
+export const MAX_PAUSE = 30
+
 export function pauseSeconds(): number {
   try {
     const stored = Number(localStorage.getItem(PAUSE_KEY))
-    return Number.isFinite(stored) && stored >= 1 && stored <= 10 ? stored : DEFAULT_PAUSE
+    return Number.isFinite(stored) && stored >= 1 && stored <= MAX_PAUSE ? stored : DEFAULT_PAUSE
   } catch {
     return DEFAULT_PAUSE
   }
@@ -60,7 +63,7 @@ export function pauseSeconds(): number {
 
 export function setPauseSeconds(seconds: number): void {
   try {
-    localStorage.setItem(PAUSE_KEY, String(Math.min(10, Math.max(1, seconds))))
+    localStorage.setItem(PAUSE_KEY, String(Math.min(MAX_PAUSE, Math.max(1, seconds))))
   } catch {
     /* private browsing: the default stands for this session */
   }

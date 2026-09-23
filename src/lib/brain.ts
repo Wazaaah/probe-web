@@ -15,7 +15,7 @@ import {
   type SourceDoc,
 } from './claims'
 import { COMPARER, comparePrompt, readWinner } from './ranking'
-import { TOPIC_EXTRACTOR, indexSummary, readTopics, relevantDocs, topicPrompt, type DocIndex } from './documents'
+import { TOPIC_EXTRACTOR, citationsAmong, indexSummary, readTopics, relevantDocs, topicPrompt, type DocIndex } from './documents'
 
 /**
  * Whoever judges the answers.
@@ -181,6 +181,7 @@ function groundedPrompt(text: string, docs: SourceDoc[], index: DocIndex | null)
   const focus = relevantDocs(text, docs, 2)
   const rest = docs.filter((d) => !focus.includes(d))
   const others = index?.filter((entry) => rest.some((d) => d.name === entry.doc.name))
+  const links = docs.length > 1 ? citationsAmong(docs) : []
 
   return `You design oral examinations.
 
@@ -192,7 +193,7 @@ Write four angles, each a different way of testing that:
 2. What the reading actually says — a place their account and the source come apart
 3. What they left out — something the reading argues that their passage needed and skipped
 4. Push back using the reading — make them defend their line against the source's own words
-${docs.length > 1 ? '\nWhere it is genuinely relevant, a question may ask how two of the readings relate — but only using what the topic summaries below actually say, never inventing a connection between them.' : ''}
+${docs.length > 1 ? '\nWhere it is genuinely relevant, a question may ask how two of the readings relate — but only using what the topic summaries or the citations below actually say, never inventing a connection between them.' : ''}
 
 Rules, all of them load-bearing:
 - Each question must be PROMPTED BY something the student wrote, but must not announce it.
@@ -216,6 +217,7 @@ ${spread(text, 6000)}
 
 ${focus.map((d) => `THE READING (${d.name})\n${spread(d.text, docs.length > 1 ? 8000 : 14000)}`).join('\n\n')}
 ${others?.length ? `\nOTHER READINGS ON THE LIST (topic summaries only — full text not shown)\n${indexSummary(others)}` : ''}
+${links.length ? `\nCITATIONS FOUND BETWEEN THE READINGS (matched mechanically against each reading's own reference list, not inferred — treat as fact)\n${links.map((l) => `${l.from} cites ${l.to}`).join('\n')}` : ''}
 
 Reply with JSON only:
 {"paths":[{"name":"","description":"","difficulty":"Gentle|Moderate|Hard","minutes":0,"opener":"the first question in quotes","script":[{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}]}]}
@@ -262,6 +264,59 @@ Reply with JSON only:
 Exactly four paths, three to five questions each.`
 }
 
+/**
+ * One more question in an angle already under way.
+ *
+ * The script a path opens with is not the whole exam any more — `worthContinuing` in
+ * examiner.ts decides, from the transcript so far, whether there is still something worth
+ * asking, and this is what writes that next question when there is. The decision to
+ * continue is deliberately NOT this prompt's job: code decides whether to keep going,
+ * grounded in measured coverage rather than a model's sense of when a session feels done;
+ * this is asked only once that decision is already made, so its only way to end things is
+ * to say, honestly, that it has run out of new ground — which the empty-question reply
+ * below covers without needing a second protocol for "stop".
+ */
+function continuePrompt(path: QuestionPath, answers: Answer[], work: string, docs: SourceDoc[], index: DocIndex | null): string {
+  const transcript = answers
+    .map((a) => `Q (${a.concept || a.question.slice(0, 40)}): ${a.question}\nCoverage: ${a.coverage}%${a.probed ? ' (needed a follow-up)' : ''}`)
+    .join('\n\n')
+
+  const grounding = docs.length
+    ? (() => {
+        const focus = relevantDocs(work, docs, 2)
+        const rest = docs.filter((d) => !focus.includes(d))
+        const others = index?.filter((entry) => rest.some((d) => d.name === entry.doc.name))
+        const links = docs.length > 1 ? citationsAmong(docs) : []
+        return `THE PASSAGE\n${spread(work, 4000)}\n\n${focus.map((d) => `THE READING (${d.name})\n${spread(d.text, 6000)}`).join('\n\n')}${others?.length ? `\n\nOTHER READINGS ON THE LIST (topic summaries only)\n${indexSummary(others)}` : ''}${links.length ? `\n\nCITATIONS FOUND BETWEEN THE READINGS (matched mechanically, treat as fact)\n${links.map((l) => `${l.from} cites ${l.to}`).join('\n')}` : ''}`
+      })()
+    : `THE PASSAGE\n${spread(work, 8000)}`
+
+  return `You design oral examinations, continuing one already under way.
+
+The angle is "${path.name}" — ${path.description}
+
+So far, in this angle:
+${transcript}
+
+${grounding}
+
+Decide whether there is a genuinely new facet of this still worth checking — something none
+of the questions above already tested, in the same spirit as the angle above (the way the
+questions already asked test DIFFERENT things about the same material, not the same thing
+twice). If there is, write ONE more question for it. If everything worth checking here has
+already been asked, reply with an empty question rather than repeating or padding one out.
+
+Rules:
+- Must be answerable only by someone who actually engaged with ${docs.length ? 'the reading(s)' : 'the material'}, not from common sense or the passage alone.
+- Must not repeat, rephrase or lightly vary any question already asked above.
+- Answerable out loud in under a minute. No yes/no questions.
+- Never invent a figure, date, finding or quotation not present in the text shown.
+
+Reply with JSON only:
+{"question":"","concept":"","expects":["3 to 6 short lowercase terms a complete spoken answer contains"],"probes":[{"condition":"if they ...","followUp":"","missing":["terms whose absence fires this"]}]}
+Leave "question" empty if there is nothing new worth asking.`
+}
+
 const CHECK = `You asked: "What does a liquidation preference do?"
 A complete answer touches on: preference, investor, paid first
 They said: "It means the investor gets paid before common."
@@ -279,6 +334,26 @@ function extractJson(raw: string): any | null {
     return JSON.parse(raw.slice(start, end + 1))
   } catch {
     return null
+  }
+}
+
+/** One question, read the same lenient way whether it came as part of a fresh script or
+ *  as a single continuation — a model's JSON habits do not change per call site. */
+function readNode(q: any): PathNode | null {
+  if (!q || typeof q.question !== 'string' || !q.question.trim()) return null
+  return {
+    question: q.question,
+    concept: q.concept || '',
+    expects: Array.isArray(q.expects) ? q.expects.filter((t: any) => typeof t === 'string') : [],
+    probes: Array.isArray(q.probes)
+      ? q.probes
+          .filter((x: any) => x && typeof x.followUp === 'string' && x.followUp.trim())
+          .map((x: any) => ({
+            condition: x.condition || 'if the answer is thin',
+            followUp: x.followUp,
+            missing: Array.isArray(x.missing) ? x.missing.filter((t: any) => typeof t === 'string') : [],
+          }))
+      : [],
   }
 }
 
@@ -368,6 +443,14 @@ export interface Brain {
    */
   compare(left: string, right: string): Promise<'A' | 'B' | null>
   buildPaths(name: string, text: string, opts?: { kind?: DocumentKind; sources?: SourceDoc[]; index?: DocIndex | null }): Promise<QuestionPath[] | null>
+  /**
+   * One more question in the same angle, grounded in the transcript so far — how a
+   * session keeps going past its opening script instead of stopping at a fixed count.
+   * Null means there is nothing left worth asking, which `worthContinuing` in
+   * examiner.ts treats the same as reaching the safety ceiling: either way, the
+   * examination ends.
+   */
+  continuePath(path: QuestionPath, answers: Answer[], work: string, docs: SourceDoc[], index: DocIndex | null): Promise<PathNode | null>
   /**
    * One line per reading on what it covers, built once when readings are uploaded.
    *
@@ -473,25 +556,16 @@ export function makeBrain(config: BrainConfig): Brain | null {
           difficulty: p.difficulty === 'Gentle' || p.difficulty === 'Hard' ? p.difficulty : 'Moderate',
           minutes: Math.max(3, Math.min(60, Number(p.minutes) || p.script.length * 2)),
           opener: p.opener || `“${p.script[0]?.question ?? ''}”`,
-          script: p.script
-            .filter((q: any) => q && typeof q.question === 'string' && q.question.trim())
-            .map((q: any) => ({
-              question: q.question,
-              concept: q.concept || '',
-              expects: Array.isArray(q.expects) ? q.expects.filter((t: any) => typeof t === 'string') : [],
-              probes: Array.isArray(q.probes)
-                ? q.probes
-                    .filter((x: any) => x && typeof x.followUp === 'string' && x.followUp.trim())
-                    .map((x: any) => ({
-                      condition: x.condition || 'if the answer is thin',
-                      followUp: x.followUp,
-                      missing: Array.isArray(x.missing) ? x.missing.filter((t: any) => typeof t === 'string') : [],
-                    }))
-                : [],
-            })),
+          script: p.script.map(readNode).filter((n: PathNode | null): n is PathNode => n !== null),
         }))
         .filter((p: QuestionPath) => p.script.length > 0)
       return paths.length > 0 ? paths : null
+    },
+
+    async continuePath(path, answers, work, docs, index) {
+      const usable = docs.filter((d) => d.text.trim())
+      const json = await quiet('You reply with JSON only.', continuePrompt(path, answers, work, usable, index), 700)
+      return readNode(json)
     },
 
     async indexDocuments(docs, existing = []) {

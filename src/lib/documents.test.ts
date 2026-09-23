@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { indexSummary, readTopics, relevantDocs, type DocIndex } from './documents'
+import { citationsAmong, indexSummary, readTopics, relevantDocs, type DocIndex } from './documents'
 import type { SourceDoc } from './claims'
 
 /**
@@ -67,6 +67,39 @@ describe('indexSummary', () => {
   it('says so for a reading with no summary rather than leaving a blank line', () => {
     const index: DocIndex = [{ doc: SINGER, topics: [] }]
     expect(indexSummary(index)).toContain('(no summary)')
+  })
+})
+
+describe('citationsAmong', () => {
+  const FORKUOR = doc(
+    'Forkuor.pdf',
+    'Forkuor monitors mining with Sentinel-1 imagery in the Birim watershed.\n\nReferences\nSnapir, B. (2017) Mapping gold mining expansion. Owusu-Nimo, F. (2018) Illegal mining sites.',
+  )
+  const SNAPIR = doc('Snapir.pdf', 'Snapir maps galamsey gold mining expansion.\n\nReferences\nForkuor, G. (2016) Monitoring with radar.')
+  const OWUSU = doc('Owusu-Nimo.pdf', 'Owusu-Nimo maps illegal mining sites in Ghana.\n\nReferences\nNone of the others are mentioned here.')
+
+  it('finds a citation when a reading’s reference list names another reading', () => {
+    expect(citationsAmong([FORKUOR, SNAPIR, OWUSU])).toContainEqual({ from: 'Forkuor.pdf', to: 'Snapir.pdf' })
+  })
+
+  it('finds citations in both directions independently', () => {
+    const links = citationsAmong([FORKUOR, SNAPIR, OWUSU])
+    expect(links).toContainEqual({ from: 'Snapir.pdf', to: 'Forkuor.pdf' })
+    expect(links).toContainEqual({ from: 'Forkuor.pdf', to: 'Owusu-Nimo.pdf' })
+  })
+
+  it('reports nothing for a reading that cites none of the others', () => {
+    const links = citationsAmong([FORKUOR, SNAPIR, OWUSU])
+    expect(links.filter((l) => l.from === 'Owusu-Nimo.pdf')).toEqual([])
+  })
+
+  it('never invents a link from a filename with no name-like word', () => {
+    const anon = doc('2609.15904.pdf', 'Some text.\n\nReferences\nForkuor, G. and Snapir, B. are both cited here.')
+    expect(citationsAmong([anon, FORKUOR, SNAPIR])).not.toContainEqual({ from: 'Forkuor.pdf', to: '2609.15904.pdf' })
+  })
+
+  it('does not cite a reading against itself', () => {
+    expect(citationsAmong([SNAPIR])).toEqual([])
   })
 })
 

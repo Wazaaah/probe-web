@@ -44,6 +44,9 @@ export interface Answer {
   /** Percentage of the expected ground the answer covered. */
   coverage: number
   probed: boolean
+  /** Whether the model judged this, or a dropped call left it to shallow term-matching.
+   *  Kept so a reviewer can tell a real gap from one the network caused. */
+  judgedBy: 'model' | 'fallback'
 }
 
 export type Understanding = 'solid' | 'shaky' | 'gap'

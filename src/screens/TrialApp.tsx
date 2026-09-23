@@ -20,6 +20,7 @@ import type { Examiner } from '../lib/examiner'
 import type { ProbeStore } from '../lib/store'
 import type { SourceDoc } from '../lib/claims'
 import type { QuestionPath } from '../data/types'
+import { citationsAmong } from '../lib/documents'
 
 /**
  * Probe with everything that is not this experiment taken out.
@@ -165,9 +166,9 @@ export function TrialApp({ store }: { store: ProbeStore }) {
     }
   }
 
-  const addFiles = async (files: FileList) => {
+  const addFiles = async (files: File[]) => {
     setReading(true)
-    for (const file of Array.from(files)) await addFile(file)
+    for (const file of files) await addFile(file)
     setReading(false)
   }
 
@@ -200,7 +201,8 @@ export function TrialApp({ store }: { store: ProbeStore }) {
       />
     )
 
-  if (stage === 'reading')
+  if (stage === 'reading') {
+    const links = docs.length > 1 ? citationsAmong(docs) : []
     return (
       <div className="pane">
         <TopBar title="The reading list" onBack={() => setStage(docs.length ? 'console' : 'brain')} />
@@ -213,11 +215,16 @@ export function TrialApp({ store }: { store: ProbeStore }) {
 
           {docs.length > 0 && (
             <div className="stack gap-10" style={{ marginBottom: 18 }}>
-              {docs.map((doc) => (
+              {docs.map((doc) => {
+                const cites = links.filter((l) => l.from === doc.name).map((l) => l.to)
+                return (
                 <div key={doc.name} className="card flat" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <span className="grow stack gap-4">
                     <span className="card-title">{doc.name}</span>
                     <span className="micro dimmer">{wordsIn(doc.text).toLocaleString()} words</span>
+                    {cites.length > 0 && (
+                      <span className="micro dimmer">Cites {cites.join(', ')} — found in its own reference list</span>
+                    )}
                   </span>
                   <button
                     className="icon-btn"
@@ -230,7 +237,8 @@ export function TrialApp({ store }: { store: ProbeStore }) {
                     <Icon name="close" size={16} />
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -281,9 +289,13 @@ export function TrialApp({ store }: { store: ProbeStore }) {
                 accept=".pdf,.docx,.txt,.md,.markdown,.csv,.json,.html,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 hidden
                 onChange={(event) => {
-                  const files = event.target.files
+                  // Grabbing the FileList by reference isn't enough: clearing
+                  // `.value` (so the same file can be re-picked later) empties
+                  // that same live FileList in place, so the array copy has to
+                  // happen first or every upload silently reads as zero files.
+                  const files = event.target.files ? Array.from(event.target.files) : []
                   event.target.value = ''
-                  if (files?.length) void addFiles(files)
+                  if (files.length) void addFiles(files)
                 }}
               />
               <button
@@ -329,6 +341,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
         </div>
       </div>
     )
+  }
 
   if (stage === 'indexing')
     return (
@@ -365,6 +378,7 @@ export function TrialApp({ store }: { store: ProbeStore }) {
         <Session
           path={path}
           brain={store.brain}
+          ground={{ work: workingText(), docs: readingDocs(), index: readingIndex() }}
           onStart={() => {
             startedAt.current = Date.now()
             recorder.begin()

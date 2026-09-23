@@ -6,6 +6,7 @@ import {
   annotate,
   clearSessions,
   exportSessions,
+  importSessions,
   loadSessions,
   readingDocs,
   saveSetup,
@@ -82,7 +83,9 @@ export function Trial({
   const [reading, setReading] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [uploadError, setUploadError] = useState('')
+  const [importMessage, setImportMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
 
   const readingLabel = readingNames.length <= 1 ? readingNames[0] || 'the reading' : `the ${readingNames.length} readings`
 
@@ -97,6 +100,28 @@ export function Trial({
     } finally {
       setReading(false)
       setProgress(null)
+    }
+  }
+
+  /**
+   * Bring in sessions exported from another device — the only way "across the class"
+   * means the whole class rather than whoever happened to run this one browser.
+   */
+  const takeImport = async (file: File) => {
+    setImportMessage('')
+    try {
+      const payload = JSON.parse(await file.text())
+      const { added, skipped } = importSessions(payload)
+      setSessions(loadSessions())
+      setImportMessage(
+        added
+          ? `Added ${added} session${added === 1 ? '' : 's'}${skipped ? `, ${skipped} already here` : ''}.`
+          : skipped
+            ? 'Already had every session in that file.'
+            : 'Nothing in that file looked like a Probe export.',
+      )
+    } catch {
+      setImportMessage('Could not read that file — is it a Probe export?')
     }
   }
 
@@ -370,6 +395,7 @@ export function Trial({
             <div className="stack gap-10" style={{ marginTop: 10 }}>
               {sessions.map((session) => {
                 const b = boundaryOf(session.grade)
+                const fallback = session.answers.filter((a) => a.judgedBy === 'fallback').length
                 return (
                   <div key={session.startedAt} className="card flat" style={{ alignItems: 'flex-start', gap: 6 }}>
                     <span className="row gap-8">
@@ -378,6 +404,12 @@ export function Trial({
                       <span className="chip">{session.authorship ?? 'unsaid'}</span>
                     </span>
                     <span className="meta">{boundaryLine(b)}</span>
+                    {fallback > 0 && (
+                      <span className="micro dim">
+                        {fallback} answer{fallback === 1 ? '' : 's'} judged by keyword-matching, not the model —
+                        the connection dropped mid-session. Read this one's boundary with that in mind.
+                      </span>
+                    )}
                     {b.held.length > 0 && (
                       <span className="micro dim">Held: {b.held.slice(0, 3).join(' · ')}</span>
                     )}
@@ -471,6 +503,23 @@ export function Trial({
               <button className="btn quiet" onClick={() => exportSessions(sessions)}>
                 Export JSON
               </button>
+              <input
+                ref={importRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                onChange={(event) => {
+                  // Same live-FileList trap as any other file input: copy the file
+                  // out before clearing `.value`, or the clear empties the list
+                  // this same reference already points at.
+                  const files = event.target.files ? Array.from(event.target.files) : []
+                  event.target.value = ''
+                  if (files[0]) void takeImport(files[0])
+                }}
+              />
+              <button className="btn quiet" onClick={() => importRef.current?.click()}>
+                Import sessions
+              </button>
               <button
                 className="btn quiet"
                 onClick={() => {
@@ -487,9 +536,12 @@ export function Trial({
                 Clear
               </button>
             </div>
+            {importMessage && <p className="meta dim" style={{ marginTop: 10 }}>{importMessage}</p>}
             <p className="meta dim" style={{ marginTop: 10 }}>
               Export before clearing, and before anything clears this browser's data. The
-              sessions live in this tab's storage and nowhere else.
+              sessions live in this tab's storage and nowhere else. Running the exam on
+              several devices? Export from each one and import them all here to see the
+              class as a whole.
             </p>
           </>
         )}

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeBrain, type BrainConfig } from './brain'
 import type { SourceDoc } from './claims'
 import type { DocIndex } from './documents'
+import type { QuestionPath } from '../data/types'
 
 /**
  * The prompt-construction half of the brain — the part that decides what a model sees —
@@ -192,7 +193,48 @@ describe('grade — across several readings', () => {
       }),
     )
     const brain = makeBrain(CONFIG)!
-    const grade = await brain.grade([{ question: 'q', concept: '', spoken: 'a', coverage: 0, probed: false }], [SINGER, MILL], '')
+    const grade = await brain.grade(
+      [{ question: 'q', concept: '', spoken: 'a', coverage: 0, probed: false, judgedBy: 'model' }],
+      [SINGER, MILL],
+      '',
+    )
     expect(grade?.claims[0].support).toBe('supported')
+  })
+})
+
+const PATH: QuestionPath = {
+  name: 'Where did this claim come from',
+  description: 'Trace a specific assertion back to what supports it in the reading',
+  difficulty: 'Moderate',
+  minutes: 6,
+  opener: 'q',
+  script: [],
+}
+
+describe('continuePath', () => {
+  it('grounds the next question in the transcript so far and the reading, not just the passage', async () => {
+    const prompt = mockChat({ question: 'What does the harm principle rule out?', concept: 'Harm principle', expects: ['harm'], probes: [] })
+    const brain = makeBrain(CONFIG)!
+    const answers = [{ question: 'Who wrote this?', concept: 'Authorship', spoken: 'Mill', coverage: 90, probed: false, judgedBy: 'model' as const }]
+    await brain.continuePath(PATH, answers, 'My passage about Mill.', [MILL], null)
+    const sent = prompt()
+    expect(sent).toContain(PATH.name)
+    expect(sent).toContain('Who wrote this?')
+    expect(sent).toContain('Mill argues the harm principle')
+  })
+
+  it('reads an empty question as "nothing left to ask", the same as a dropped call', async () => {
+    mockChat({ question: '', concept: '', expects: [], probes: [] })
+    const brain = makeBrain(CONFIG)!
+    const node = await brain.continuePath(PATH, [], 'passage', [MILL], null)
+    expect(node).toBeNull()
+  })
+
+  it('still works with no readings at all, grounding only in the passage', async () => {
+    const prompt = mockChat({ question: 'What follows from that?', concept: 'Implication', expects: ['x'], probes: [] })
+    const brain = makeBrain(CONFIG)!
+    const node = await brain.continuePath(PATH, [], 'A passage with no attached reading.', [], null)
+    expect(node?.question).toBe('What follows from that?')
+    expect(prompt()).toContain('A passage with no attached reading.')
   })
 })

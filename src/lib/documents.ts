@@ -83,6 +83,73 @@ export function relevantDocs(work: string, docs: SourceDoc[], take = 2): SourceD
   return relevant.length ? relevant : scored.slice(0, take).map((r) => r.doc)
 }
 
+/* -- real citations between the uploaded readings, no model call ---------- */
+
+/**
+ * A genuine cross-reading relationship, mechanically found rather than inferred.
+ *
+ * The graph that got rejected asked a model to decide how two readings relate, which on
+ * argumentative prose invents a relationship about as often as it finds one. This asks a
+ * much narrower question a model never touches: does this reading's own reference list
+ * contain the word this OTHER reading is named after? Readings are, in ordinary use,
+ * named after their author or title ("Singer.pdf", "Forkuor et al.pdf") — so a match is
+ * either a real citation or, at worst, a coincidence of surname. It is never a guess,
+ * because nothing here is asked to interpret meaning.
+ *
+ * This misses real relationships that are not visible as a citation — two readings that
+ * cover the same ground without citing each other will never show up here — and it misses
+ * readings whose filename carries no name-like word (an arXiv id, a scanned title page).
+ * Both are honest gaps in what a purely mechanical check can find, not failures of it.
+ */
+export interface Citation {
+  /** The reading whose reference list contains the mention. */
+  from: string
+  /** The reading it appears to cite. */
+  to: string
+}
+
+const REFERENCE_HEADING = /\n\s*(references?|bibliography|works cited|reference list)\s*\n/gi
+
+/**
+ * The part of a document most likely to be its reference list.
+ *
+ * From the last heading that looks like one to the end — the last, because an early false
+ * positive (a section merely discussing "references" in prose) is not where a bibliography
+ * actually sits. Falls back to the closing stretch of the document when no heading is
+ * found at all, which still beats scanning the whole argument for citation-shaped text.
+ */
+function referenceSection(text: string): string {
+  const last = [...text.matchAll(REFERENCE_HEADING)].pop()
+  return last?.index != null ? text.slice(last.index) : text.slice(Math.floor(text.length * 0.8))
+}
+
+/**
+ * The word a reading is most likely named after — usually an author's surname, sometimes
+ * the first word of a title. The first run of four or more letters in the filename, which
+ * matches how people actually name a PDF they saved ("Singer.pdf", "Singer - Famine.pdf")
+ * and quietly returns nothing for a filename that carries no such word (an arXiv id, a
+ * scan), rather than guessing at one.
+ */
+function identityToken(name: string): string | null {
+  const base = name.replace(/\.[a-z0-9]+$/i, '')
+  const token = base.match(/[A-Za-z][A-Za-z'-]{3,}/)?.[0]
+  return token && !STOP.has(token.toLowerCase()) ? token : null
+}
+
+/** Every reading's reference list, checked for every other reading's identity token. */
+export function citationsAmong(docs: SourceDoc[]): Citation[] {
+  const identities = docs.map((doc) => ({ name: doc.name, token: identityToken(doc.name) }))
+  const out: Citation[] = []
+  for (const citer of docs) {
+    const refs = referenceSection(citer.text).toLowerCase()
+    for (const { name, token } of identities) {
+      if (!token || name === citer.name) continue
+      if (new RegExp(`\\b${token.toLowerCase()}\\b`).test(refs)) out.push({ from: citer.name, to: name })
+    }
+  }
+  return out
+}
+
 /* -- the one-line-per-reading index, one model call per reading ----------- */
 
 export const TOPIC_EXTRACTOR = 'You summarise what a document covers. You do not evaluate it and you do not invent connections to anything else.'

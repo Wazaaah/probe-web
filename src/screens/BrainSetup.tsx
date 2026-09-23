@@ -4,6 +4,7 @@ import { TopBar } from '../components/ui'
 import { PROVIDERS, makeBrain, providerInfo, type ProviderId } from '../lib/brain'
 import {
   DEFAULT_PAUSE,
+  MAX_PAUSE,
   availableVoices,
   chosenVoiceName,
   pauseSeconds,
@@ -229,21 +230,24 @@ export function BrainSetup({ store, onBack }: { store: ProbeStore; onBack: () =>
             this, the examiner keeps listening rather than taking the silence for an answer.
           </p>
         </div>
-        <div className="row gap-8" style={{ marginTop: 10 }}>
-          {[1.5, 2.5, 4, 6].map((seconds) => (
-            <button
-              key={seconds}
-              className={`btn${pause === seconds ? '' : ' quiet'}`}
-              style={{ flex: 1, minWidth: 0 }}
-              onClick={() => {
-                setPause(seconds)
-                setPauseSeconds(seconds)
-              }}
-              aria-pressed={pause === seconds}
-            >
-              {seconds}s
-            </button>
-          ))}
+        <div className="row gap-12" style={{ marginTop: 10, alignItems: 'center' }}>
+          <input
+            type="range"
+            min={1}
+            max={MAX_PAUSE}
+            step={0.5}
+            value={pause}
+            onChange={(event) => {
+              const seconds = Number(event.target.value)
+              setPause(seconds)
+              setPauseSeconds(seconds)
+            }}
+            style={{ flex: 1 }}
+            aria-label="Pause before an answer counts as finished, in seconds"
+          />
+          <span className="body-med" style={{ minWidth: 42, textAlign: 'right' }}>
+            {pause}s
+          </span>
         </div>
         <p className="micro dimmer" style={{ marginTop: 8 }}>
           {pause === DEFAULT_PAUSE ? 'The default.' : `Changed from ${DEFAULT_PAUSE}s.`} Longer is

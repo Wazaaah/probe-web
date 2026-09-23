@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { signalsFor, type TrialTurn } from './trial'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { importSessions, loadSessions, signalsFor, type TrialSession, type TrialTurn } from './trial'
 
 /**
  * These measures are the reason for running a trial at all, so they have to be right
@@ -129,5 +129,70 @@ describe('signalsFor', () => {
     const long = signalsFor([turn(`${once} ${once} ${once}`)], DOCUMENT)
     expect(long.words).toBeGreaterThan(short.words)
     expect(long.hedge).toBeCloseTo(short.hedge, 5)
+  })
+})
+
+/** A minimal in-memory Storage, since Node has no real localStorage for these to hit. */
+function memoryStorage(): Storage {
+  const store = new Map<string, string>()
+  return {
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: (i: number) => [...store.keys()][i] ?? null,
+    get length() {
+      return store.size
+    },
+  } as Storage
+}
+
+const trialSession = (participant: string, startedAt: number): TrialSession => ({
+  participant,
+  preparation: 'read',
+  authorship: 'own',
+  documents: [],
+  startedAt,
+  endedAt: startedAt + 1000,
+  turns: [],
+  answers: [],
+  score: 80,
+  grade: null,
+  signals: null,
+  note: '',
+})
+
+/**
+ * Merging sessions collected on a different device is the only way a class report ever
+ * sees more than whoever happened to test it on this one browser, so the dedupe here has
+ * to actually hold: importing the same export twice must not double a student up.
+ */
+describe('importSessions', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', memoryStorage()))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('adds every session not already on this device', () => {
+    const result = importSessions({ sessions: [trialSession('Ama', 1), trialSession('Kwesi', 2)] })
+    expect(result).toEqual({ added: 2, skipped: 0 })
+    expect(loadSessions()).toHaveLength(2)
+  })
+
+  it('skips a session already recorded here, by participant and start time', () => {
+    importSessions({ sessions: [trialSession('Ama', 1)] })
+    const result = importSessions({ sessions: [trialSession('Ama', 1), trialSession('Kwesi', 2)] })
+    expect(result).toEqual({ added: 1, skipped: 1 })
+    expect(loadSessions().map((s) => s.participant).sort()).toEqual(['Ama', 'Kwesi'])
+  })
+
+  it('treats the same participant at a different time as a different session', () => {
+    importSessions({ sessions: [trialSession('Ama', 1)] })
+    const result = importSessions({ sessions: [trialSession('Ama', 2)] })
+    expect(result).toEqual({ added: 1, skipped: 0 })
+  })
+
+  it('reads a file that is not a Probe export as nothing to add, not an error', () => {
+    expect(importSessions({ notSessions: true })).toEqual({ added: 0, skipped: 0 })
+    expect(importSessions('garbage')).toEqual({ added: 0, skipped: 0 })
+    expect(importSessions(null)).toEqual({ added: 0, skipped: 0 })
   })
 })

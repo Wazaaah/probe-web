@@ -89,6 +89,7 @@ export function Learner({ store }: { store: ProbeStore }) {
                 spoken: summary.momentQuote,
                 coverage: 0,
                 probed: true,
+                judgedBy: 'model',
               }
             : local.moment,
         }

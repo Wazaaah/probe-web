@@ -503,16 +503,52 @@ export function exportSessions(sessions = loadSessions()): void {
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
+/**
+ * Merge sessions exported from another device into this one's collection.
+ *
+ * `classReport` only ever sees the sessions sitting in this browser's own storage, and a
+ * real class sits the exam on their own laptops, not on one shared machine — so without
+ * this, "across the class" never sees further than whoever happened to test it here. The
+ * organiser collects each device's export and imports them one by one into whichever
+ * browser is meant to hold the whole picture. Dedupes on participant + start time, which
+ * is as close to an identity as an exported session carries.
+ */
+export function importSessions(payload: unknown): { added: number; skipped: number } {
+  const incoming = Array.isArray((payload as { sessions?: unknown })?.sessions)
+    ? ((payload as { sessions: unknown[] }).sessions as TrialSession[])
+    : []
+  const existing = loadSessions()
+  const known = new Set(existing.map((s) => `${s.participant}\u0000${s.startedAt}`))
+  const additions = incoming.filter(
+    (s) =>
+      s &&
+      typeof s.startedAt === 'number' &&
+      typeof s.participant === 'string' &&
+      !known.has(`${s.participant}\u0000${s.startedAt}`),
+  )
+  if (additions.length) {
+    try {
+      localStorage.setItem(SESSIONS, JSON.stringify([...existing, ...additions]))
+    } catch {
+      /* storage full or blocked: nothing imported, nothing lost either */
+    }
+  }
+  return { added: additions.length, skipped: incoming.length - additions.length }
+}
+
 /** A compact table for reading on the spot, before anyone opens the JSON. */
 export function summarise(sessions = loadSessions()): string {
   if (!sessions.length) return 'No sessions recorded yet.'
-  const head = ['participant', 'prep', 'wrote', 'score', 'claims', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
+  const head = ['participant', 'prep', 'wrote', 'score', 'claims', 'fallback', 'words', 'hedge', 'repair', 'gYield', 'srcEcho', 'ownEcho', 'silence']
   const rows = sessions.map((s) => [
     s.participant,
     s.preparation,
     s.authorship ?? 'unsaid',
     s.score == null ? '—' : String(s.score),
     s.grade == null ? '—' : `${s.grade.score}`,
+    // How many answers a dropped call left to shallow term-matching — high here means
+    // read this session's boundary with caution, not that the student struggled.
+    String(s.answers.filter((a) => a.judgedBy === 'fallback').length),
     String(s.signals?.words ?? 0),
     (s.signals?.hedge ?? 0).toFixed(2),
     (s.signals?.repair ?? 0).toFixed(2),

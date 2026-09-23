@@ -69,12 +69,12 @@ export class Examiner {
    * Applies a verdict from whichever brain produced it. A spent probe cannot fire
    * again, so a learner who keeps missing is moved along rather than trapped.
    */
-  apply(said: string, verdict: Verdict): Move | null {
+  apply(said: string, verdict: Verdict, judgedBy: Answer['judgedBy'] = 'model'): Move | null {
     const node = this.node
     if (!node) return null
 
     const press = !verdict.covered && verdict.followUp.trim().length > 0 && !this.probedHere
-    this.record(node, said, verdict.coverage, press || this.probing)
+    this.record(node, said, verdict.coverage, press || this.probing, judgedBy)
 
     if (press) {
       this.firedHere.add(this.firedHere.size)
@@ -89,9 +89,28 @@ export class Examiner {
     return next ? { question: next.question, index: this.index, probe: false } : null
   }
 
+  /**
+   * Grows the script past what it opened with — how a session keeps going once
+   * `worthContinuing` says there is still something worth asking. Appended, not
+   * replaced, so the transcript already recorded never has to move.
+   */
+  extend(nodes: PathNode[]): void {
+    this.script.push(...nodes)
+  }
+
+  /**
+   * The move for wherever the pointer already sits, without advancing it — for resuming
+   * right after `extend()`, since `apply()` already moved the pointer past the script it
+   * was given and only found nothing there because the script was still short.
+   */
+  resume(): Move | null {
+    const next = this.script[this.index]
+    return next ? { question: next.question, index: this.index, probe: false } : null
+  }
+
   /** One row per question: a probe replaces the earlier attempt rather than adding one. */
-  private record(node: PathNode, spoken: string, coverage: number, probed: boolean): void {
-    const entry: Answer = { question: node.question, concept: node.concept, spoken, coverage, probed }
+  private record(node: PathNode, spoken: string, coverage: number, probed: boolean, judgedBy: Answer['judgedBy']): void {
+    const entry: Answer = { question: node.question, concept: node.concept, spoken, coverage, probed, judgedBy }
     const at = this.answers.findIndex((a) => a.question === node.question)
     if (at < 0) {
       this.answers.push(entry)
@@ -135,4 +154,27 @@ export class Examiner {
     if (gaps === 0) return `Ready, with ${shaky} soft spot${shaky === 1 ? '' : 's'}.`
     return `${gaps} gap${gaps === 1 ? '' : 's'} to close before this is defensible.`
   }
+}
+
+/**
+ * How many questions an exchange runs is not written down anywhere; it comes out of how
+ * it is going. Below the minimum, keep going regardless — a boundary needs several angles
+ * on it before it is real, not one lucky or unlucky answer (the fractions example in the
+ * proposal uses five, one per facet). Above the maximum, stop regardless — a defensible
+ * exam and an open-ended one are different products, and someone has to catch a bus. In
+ * between, the transcript itself decides: once the last few answers all land the same way,
+ * solidly covered or solidly not, another question is not finding a new edge, it is
+ * re-finding the one already found.
+ */
+const MIN_QUESTIONS = 8
+const MAX_QUESTIONS = 16
+const STABLE_RUN = 3
+
+export function worthContinuing(answers: Answer[]): boolean {
+  if (answers.length < MIN_QUESTIONS) return true
+  if (answers.length >= MAX_QUESTIONS) return false
+  const recent = answers.slice(-STABLE_RUN)
+  if (recent.length < STABLE_RUN) return true
+  const settled = recent.every((a) => a.coverage >= 70) || recent.every((a) => a.coverage < 30)
+  return !settled
 }

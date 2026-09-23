@@ -1,11 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../components/Icon'
-import { Examiner } from '../lib/examiner'
+import { Examiner, worthContinuing } from '../lib/examiner'
 import { recorder } from '../lib/trial'
 import { Voice } from '../lib/voice'
 import type { Brain } from '../lib/brain'
+import type { SourceDoc } from '../lib/claims'
+import type { DocIndex } from '../lib/documents'
 import type { QuestionPath } from '../data/types'
 import { SESSION_INTRO } from '../data/sample'
+
+/**
+ * What a session needs in hand to keep writing questions past its opening script.
+ *
+ * Only present where the source text actually lives in the same tab as the exam — the
+ * trial console. The ordinary paired reviewer/learner flow hands the learner only the
+ * already-built paths over the pairing link, never the reading itself, so there is
+ * nothing to ground a new question in there and continuation stays off — the session
+ * keeps its original fixed script, exactly as before.
+ */
+export interface Grounding {
+  work: string
+  docs: SourceDoc[]
+  index: DocIndex | null
+}
 
 type OrbState = 'listening' | 'thinking' | 'speaking'
 
@@ -123,12 +140,14 @@ function Orb({ state, onTap }: { state: OrbState; onTap: () => void }) {
 export function Session({
   path,
   brain,
+  ground,
   onFinish,
   onPause,
   onStart,
 }: {
   path: QuestionPath
   brain: Brain | null
+  ground?: Grounding
   onFinish: (examiner: Examiner) => void
   onPause: () => void
   onStart: () => void
@@ -225,24 +244,49 @@ export function Session({
       recorder.answered(examiner.position, node?.question ?? question, examiner.probedHere, said, typingRef.current)
 
       let verdict = node && brain ? await brain.judge(path, node, said, examiner.probedHere) : null
+      let judgedBy: 'model' | 'fallback' = 'model'
       if (!verdict) {
         // A dropped call must never stall a live examination.
         await new Promise((resolve) => setTimeout(resolve, 700))
         verdict = examiner.localVerdict(said)
+        judgedBy = 'fallback'
       }
 
-      const move = examiner.apply(said, verdict)
+      const move = examiner.apply(said, verdict, judgedBy)
       if (!alive.current) return
       if (move) {
         setIndex(move.index)
         setPressing(move.probe)
         ask(move.question)
-      } else {
-        voice.stopListening()
-        onFinish(examiner)
+        return
       }
+
+      // The script ran out, but that is not the same as being done — whether to keep
+      // going is a question about how it went, not about how many questions were
+      // written down at the start. `ground` is only present where there is a real
+      // reading and passage to write a new question from (the trial console); the
+      // paired reviewer/learner flow never has the source text on the learner's
+      // device, so it stays on its original fixed script.
+      if (ground && brain && worthContinuing(examiner.answers)) {
+        setOrb('thinking')
+        const nextNode = await brain.continuePath(path, examiner.answers, ground.work, ground.docs, ground.index)
+        if (!alive.current) return
+        if (nextNode) {
+          examiner.extend([nextNode])
+          const resumed = examiner.resume()
+          if (resumed) {
+            setIndex(resumed.index)
+            setPressing(false)
+            ask(resumed.question)
+            return
+          }
+        }
+      }
+
+      voice.stopListening()
+      onFinish(examiner)
     },
-    [ask, brain, examiner, onFinish, openMic, path, voice],
+    [ask, brain, examiner, ground, onFinish, openMic, path, voice],
   )
   submitRef.current = submit
 

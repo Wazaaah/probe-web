@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { Examiner } from './examiner'
-import type { PathNode } from '../data/types'
+import { Examiner, worthContinuing } from './examiner'
+import type { Answer, PathNode } from '../data/types'
 
 /**
  * The branching rules, held to the same contract as the Android build.
@@ -135,5 +135,71 @@ describe('Examiner', () => {
 
     expect(move?.probe).toBe(false)
     expect(examiner.answers[0].coverage).toBe(90)
+  })
+
+  it('records a model verdict as such by default', () => {
+    const examiner = new Examiner(SCRIPT)
+    examiner.opening()
+    examiner.apply('The investor takes their preference first', { covered: true, coverage: 100, followUp: '' })
+    expect(examiner.answers[0].judgedBy).toBe('model')
+  })
+
+  it('records which judge actually produced a verdict, model or fallback', () => {
+    const examiner = new Examiner(SCRIPT)
+    examiner.opening()
+    examiner.apply('The investor takes their preference first', examiner.localVerdict('irrelevant'), 'fallback')
+    expect(examiner.answers[0].judgedBy).toBe('fallback')
+  })
+
+  it('extend grows the script, and resume picks up right where apply left off', () => {
+    const examiner = new Examiner(SCRIPT)
+    examiner.opening()
+    judge(examiner, 'The investor takes their preference first')
+    judge(examiner, 'Nothing, it is zero')
+    // The script is exhausted — apply() already moved the pointer past the end.
+    expect(examiner.resume()).toBeNull()
+
+    examiner.extend([{ question: 'One more thing?', concept: 'Extra', expects: ['x'], probes: [] }])
+    const resumed = examiner.resume()
+    expect(resumed?.question).toBe('One more thing?')
+    expect(resumed?.index).toBe(2)
+    expect(examiner.total).toBe(3)
+  })
+})
+
+const answerAt = (coverage: number, over: Partial<Answer> = {}): Answer => ({
+  question: 'q',
+  concept: 'c',
+  spoken: 's',
+  coverage,
+  probed: false,
+  judgedBy: 'model',
+  ...over,
+})
+
+describe('worthContinuing', () => {
+  it('always continues below the minimum, whatever the performance', () => {
+    expect(worthContinuing([answerAt(100), answerAt(100), answerAt(100)])).toBe(true)
+    expect(worthContinuing([answerAt(0), answerAt(0), answerAt(0)])).toBe(true)
+  })
+
+  it('stops once several solid answers in a row have found nothing new', () => {
+    const answers = [answerAt(80), answerAt(85), answerAt(60), answerAt(90), answerAt(75), answerAt(80), answerAt(95), answerAt(90)]
+    expect(worthContinuing(answers)).toBe(false)
+  })
+
+  it('stops once several answers in a row have all collapsed the same way', () => {
+    const answers = [answerAt(80), answerAt(20), answerAt(10), answerAt(60), answerAt(50), answerAt(10), answerAt(5), answerAt(15)]
+    expect(worthContinuing(answers)).toBe(false)
+  })
+
+  it('keeps going while recent answers are mixed rather than settled', () => {
+    const answers = [answerAt(80), answerAt(20), answerAt(60), answerAt(50), answerAt(70), answerAt(80), answerAt(20), answerAt(75)]
+    expect(worthContinuing(answers)).toBe(true)
+  })
+
+  it('stops at the ceiling regardless of how unsettled it still looks', () => {
+    const answers = Array.from({ length: 16 }, (_, i) => answerAt(i % 2 ? 90 : 10))
+    expect(worthContinuing(answers)).toBe(false)
   })
 })
