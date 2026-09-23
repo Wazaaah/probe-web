@@ -9,8 +9,10 @@ import { ProbeApp } from './screens/app/ProbeApp'
 import { useProbe } from './lib/store'
 
 /**
- * Open it, watch the mark draw, pick a side. That choice is kept until you sign out,
- * and everything after it depends on which side this browser is.
+ * The real app is what opens by default now — no hash needed. It's the product; the
+ * original paired reviewer/learner demo (pick a side, pair over a code) is the earlier
+ * prototype this grew out of, kept reachable at #demo rather than deleted, in case it's
+ * still useful for showing someone the original concept.
  *
  * Except in the judge-testing build. `npm run build:trial` sets VITE_TRIAL and the app
  * opens instead on the one sequence an afternoon of testing needs — key, reading, angle,
@@ -63,20 +65,20 @@ export function App() {
     return <Trial onLeave={() => go('')} onReview={() => go('#review')} />
   }
 
-  if (hash === '#app') {
-    return <ProbeApp store={store} />
+  if (hash === '#demo') {
+    return (
+      <>
+        {store.role === null ? (
+          <RoleChooser initialCode={store.code} onSignIn={store.signIn} />
+        ) : store.role === 'learner' ? (
+          <Learner store={store} />
+        ) : (
+          <Reviewer store={store} />
+        )}
+        {splash !== 'gone' && <Splash leaving={splash === 'out'} />}
+      </>
+    )
   }
 
-  return (
-    <>
-      {store.role === null ? (
-        <RoleChooser initialCode={store.code} onSignIn={store.signIn} />
-      ) : store.role === 'learner' ? (
-        <Learner store={store} />
-      ) : (
-        <Reviewer store={store} />
-      )}
-      {splash !== 'gone' && <Splash leaving={splash === 'out'} />}
-    </>
-  )
+  return <ProbeApp store={store} />
 }
