@@ -1,15 +1,31 @@
+import { useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { boundaryLine, boundaryOf, studentReportText } from '../../lib/report'
-import { downloadReport, examsFor, readingFor } from '../../lib/roster'
+import { downloadReport, examsFor, readingFor, updateExamGrade } from '../../lib/roster'
+import type { ProbeStore } from '../../lib/store'
 
 /**
  * One student's whole record — every exam they've sat, each against whichever reading it
  * was for. This is the page a lecturer downloads from before handing anything to a
  * student; the student never sees this page themselves.
  */
-export function StudentRecord({ indexNumber, onBack }: { indexNumber: string; onBack: () => void }) {
-  const exams = examsFor(indexNumber)
+export function StudentRecord({ store, indexNumber, onBack }: { store: ProbeStore; indexNumber: string; onBack: () => void }) {
+  const [exams, setExams] = useState(() => examsFor(indexNumber))
+  const [regradingId, setRegradingId] = useState<string | null>(null)
   const name = exams[0]?.student.name ?? indexNumber
+
+  const retryGrade = async (examId: string) => {
+    const target = exams.find((e) => e.id === examId)
+    const reading = target ? readingFor(target.readingId) : null
+    if (!target || !reading || !store.brain) return
+    setRegradingId(examId)
+    const grade = await store.brain.grade(target.answers, reading.docs, target.work).catch(() => null)
+    const next = grade ?? target.grade
+    const score = grade && !grade.checkFailed ? grade.score : target.score
+    if (next) updateExamGrade(examId, next, score)
+    setExams(examsFor(indexNumber))
+    setRegradingId(null)
+  }
 
   return (
     <div className="pa-stack pa-gap-20">
@@ -28,27 +44,40 @@ export function StudentRecord({ indexNumber, onBack }: { indexNumber: string; on
           const boundary = boundaryOf(exam.grade)
           const week = reading?.week ?? 'Reading no longer listed'
           return (
-            <div key={exam.id} className="pa-card pa-stack pa-gap-10">
+            <div key={exam.id} className="pa-card pa-stack pa-gap-10" style={boundary.checkFailed ? { borderColor: 'var(--pa-bad)' } : undefined}>
               <div className="pa-between">
                 <span className="pa-h3">{week}</span>
                 <span className="pa-meta">{new Date(exam.startedAt).toLocaleDateString()}</span>
               </div>
-              <span className="pa-body" style={{ fontWeight: 600 }}>{boundaryLine(boundary)}</span>
+              <span className="pa-body" style={{ fontWeight: 600, color: boundary.checkFailed ? 'var(--pa-bad)' : undefined }}>
+                {boundaryLine(boundary)}
+              </span>
               {boundary.held.length > 0 && <span className="pa-meta">Held: {boundary.held.slice(0, 4).join(' · ')}</span>}
               {boundary.unsupported.length > 0 && <span className="pa-meta">Not borne out: {boundary.unsupported.slice(0, 4).join(' · ')}</span>}
               {boundary.wrong.length > 0 && <span className="pa-meta">Contradicted: {boundary.wrong.slice(0, 4).join(' · ')}</span>}
-              <button
-                className="pa-btn quiet"
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() =>
-                  downloadReport(
-                    `${exam.student.indexNumber}-${exam.student.name.replace(/\s+/g, '-')}-${week.replace(/\s+/g, '-')}.txt`,
-                    studentReportText(exam.student.name, exam.student.indexNumber, week, boundary),
-                  )
-                }
-              >
-                Download this report
-              </button>
+              {boundary.checkFailed ? (
+                <button
+                  className="pa-btn"
+                  style={{ alignSelf: 'flex-start' }}
+                  disabled={regradingId === exam.id}
+                  onClick={() => void retryGrade(exam.id)}
+                >
+                  {regradingId === exam.id ? 'Re-grading…' : 'Retry grading'}
+                </button>
+              ) : (
+                <button
+                  className="pa-btn quiet"
+                  style={{ alignSelf: 'flex-start' }}
+                  onClick={() =>
+                    downloadReport(
+                      `${exam.student.indexNumber}-${exam.student.name.replace(/\s+/g, '-')}-${week.replace(/\s+/g, '-')}.txt`,
+                      studentReportText(exam.student.name, exam.student.indexNumber, week, boundary),
+                    )
+                  }
+                >
+                  Download this report
+                </button>
+              )}
             </div>
           )
         })}

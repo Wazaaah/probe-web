@@ -167,6 +167,11 @@ describe('scoreClaims', () => {
     expect(loose.fresh).toBe(careful.fresh)
     expect(loose.score).toBeLessThan(careful.score)
   })
+
+  it('defaults checkFailed to false, and carries it through when set', () => {
+    expect(scoreClaims([claim('supported')]).checkFailed).toBe(false)
+    expect(scoreClaims([claim('absent')], 4, true).checkFailed).toBe(true)
+  })
 })
 
 describe('reading what the model returned', () => {

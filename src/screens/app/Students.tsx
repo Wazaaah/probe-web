@@ -33,18 +33,23 @@ export function Students({ onOpen }: { onOpen: (indexNumber: string) => void }) 
         <div className="pa-empty">{q ? 'No one matches that search.' : 'No exams recorded yet.'}</div>
       ) : (
         <div className="pa-card pa-list">
-          {entries.map(({ student, exams }) => (
-            <button key={student.indexNumber} className="pa-list-row link" style={{ width: '100%', cursor: 'pointer' }} onClick={() => onOpen(student.indexNumber)}>
-              <span className="pa-avatar">{initials(student.name)}</span>
-              <span className="pa-grow pa-stack pa-gap-4" style={{ alignItems: 'flex-start' }}>
-                <span className="pa-body" style={{ fontWeight: 600 }}>{student.name}</span>
-                <span className="pa-micro">
-                  {student.indexNumber} · {exams.length} exam{exams.length === 1 ? '' : 's'} · {boundaryLine(boundaryOf(exams[0].grade))}
+          {entries.map(({ student, exams }) => {
+            const boundary = boundaryOf(exams[0].grade)
+            return (
+              <button key={student.indexNumber} className="pa-list-row link" style={{ width: '100%', cursor: 'pointer' }} onClick={() => onOpen(student.indexNumber)}>
+                <span className="pa-avatar">{initials(student.name)}</span>
+                <span className="pa-grow pa-stack pa-gap-4" style={{ alignItems: 'flex-start' }}>
+                  <span className="pa-body" style={{ fontWeight: 600 }}>{student.name}</span>
+                  <span className="pa-micro">
+                    {student.indexNumber} · {exams.length} exam{exams.length === 1 ? '' : 's'}
+                    {!boundary.checkFailed && ` · ${boundaryLine(boundary)}`}
+                  </span>
                 </span>
-              </span>
-              <Icon name="chev" size={16} color="var(--pa-ink-faint)" />
-            </button>
-          ))}
+                {boundary.checkFailed && <span className="pa-chip bad">Check failed</span>}
+                <Icon name="chev" size={16} color="var(--pa-ink-faint)" />
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

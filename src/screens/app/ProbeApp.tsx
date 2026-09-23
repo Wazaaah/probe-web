@@ -69,7 +69,7 @@ export function ProbeApp({ store }: { store: ProbeStore }) {
 
   let body: React.ReactNode
   if (screen === 'students' && openStudent) {
-    body = <StudentRecord indexNumber={openStudent} onBack={() => setOpenStudent(null)} />
+    body = <StudentRecord store={store} indexNumber={openStudent} onBack={() => setOpenStudent(null)} />
   } else if (screen === 'home') {
     body = <Home go={go} />
   } else if (screen === 'run') {

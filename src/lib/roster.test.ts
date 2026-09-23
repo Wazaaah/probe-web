@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadExams, loadReadings, roster, saveExam, saveReading, type ExamRecord, type Reading } from './roster'
+import { loadExams, loadReadings, roster, saveExam, saveReading, updateExamGrade, type ExamRecord, type Reading } from './roster'
 
 /** A minimal in-memory Storage, since Node has no real localStorage for these to hit. */
 function memoryStorage(): Storage {
@@ -68,5 +68,17 @@ describe('roster', () => {
   it('starts empty rather than throwing on a fresh device', () => {
     expect(loadExams()).toEqual([])
     expect(roster()).toEqual([])
+  })
+
+  it('re-grades an exam in place, without disturbing the others', () => {
+    saveExam(exam('68742026', 'McNobert Amoah', { readingId: 'w1' }))
+    saveExam(exam('68741111', 'Ama Owusu', { readingId: 'w1' }))
+    const target = loadExams()[0]
+    const newGrade = { claims: [], precision: 0, fresh: 0, score: 0, checkFailed: false }
+    updateExamGrade(target.id, newGrade, 42)
+    const updated = loadExams().find((e) => e.id === target.id)
+    expect(updated?.grade).toEqual(newGrade)
+    expect(updated?.score).toBe(42)
+    expect(loadExams()).toHaveLength(2)
   })
 })

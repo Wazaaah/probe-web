@@ -65,6 +65,14 @@ export interface Grade {
   fresh: number
   /** 0-100, for sitting beside the existing score. */
   score: number
+  /**
+   * The checker call itself failed or returned nothing readable — every claim below
+   * defaulted to "absent" for that reason, not because the source was actually checked
+   * and found wanting. Conflating those two is the worst failure mode this file has: it
+   * reads as "held nothing, everything unsupported," which is indistinguishable from a
+   * real transcript of someone who knew nothing, unless this flag says otherwise.
+   */
+  checkFailed: boolean
 }
 
 /* -- retrieval, in the browser, at no cost -------------------------------- */
@@ -191,8 +199,8 @@ export function recycles(claim: string, work: string, threshold = 0.3): boolean 
  * things the source bears out, and few it does not. Four fresh supported claims is
  * treated as a full showing, which is about what three or four questions can surface.
  */
-export function scoreClaims(claims: Claim[], target = 4): Grade {
-  if (!claims.length) return { claims, precision: 0, fresh: 0, score: 0 }
+export function scoreClaims(claims: Claim[], target = 4, checkFailed = false): Grade {
+  if (!claims.length) return { claims, precision: 0, fresh: 0, score: 0, checkFailed }
   const supported = claims.filter((c) => c.support === 'supported')
   const fresh = supported.filter((c) => !c.recycled).length
   const precision = supported.length / claims.length
@@ -201,6 +209,7 @@ export function scoreClaims(claims: Claim[], target = 4): Grade {
     precision,
     fresh,
     score: Math.round(precision * Math.min(1, fresh / target) * 100),
+    checkFailed,
   }
 }
 

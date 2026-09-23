@@ -505,7 +505,14 @@ export function makeBrain(config: BrainConfig): Brain | null {
       const windows = windowsOf(usable)
       const items = claims.map((claim) => ({ claim, evidence: evidenceFor(claim, windows, usable) }))
 
-      const checked = await quiet(CHECKER, checkPrompt(items), 2000)
+      // One retry: this runs once, after the exam is over, with nobody waiting on a live
+      // reply, so there is no reason to accept a single dropped call the way judging mid-
+      // session has to. A checker call that fails silently defaults every claim to
+      // "absent" — indistinguishable from a transcript of someone who knew nothing unless
+      // something downstream is told the difference, which is what checkFailed is for.
+      let checked = await quiet(CHECKER, checkPrompt(items), 2000)
+      if (!checked || !Array.isArray(checked.verdicts)) checked = await quiet(CHECKER, checkPrompt(items), 2000)
+      const checkFailed = !checked || !Array.isArray(checked.verdicts)
       const verdicts = readVerdicts(checked?.verdicts, claims.length)
 
       return scoreClaims(
@@ -515,6 +522,8 @@ export function makeBrain(config: BrainConfig): Brain | null {
           recycled: recycles(text, work),
           passage: passageFor(text, windows),
         })),
+        4,
+        checkFailed,
       )
     },
 

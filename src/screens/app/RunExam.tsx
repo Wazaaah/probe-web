@@ -4,7 +4,7 @@ import { Session } from '../Session'
 import { Examiner } from '../../lib/examiner'
 import { UnreadableFile, readDocument } from '../../lib/doc'
 import { boundaryLine, boundaryOf, studentReportText } from '../../lib/report'
-import { downloadReport, readingsByWeek, saveExam, type ExamRecord, type Reading } from '../../lib/roster'
+import { downloadReport, readingsByWeek, saveExam, updateExamGrade, type ExamRecord, type Reading } from '../../lib/roster'
 import { studentFromFilename, type Student } from '../../lib/student'
 import type { QuestionPath } from '../../data/types'
 import type { ProbeStore } from '../../lib/store'
@@ -34,6 +34,7 @@ export function RunExam({ store }: { store: ProbeStore }) {
   const [path, setPath] = useState<QuestionPath | null>(null)
   const [record, setRecord] = useState<ExamRecord | null>(null)
   const [downloaded, setDownloaded] = useState(false)
+  const [regrading, setRegrading] = useState(false)
 
   const takeFile = async (picked: File) => {
     setError('')
@@ -99,6 +100,19 @@ export function RunExam({ store }: { store: ProbeStore }) {
     setStage('report')
   }
 
+  /** The transcript is already there — a failed check can be retried without putting the
+   *  student through the exam again. */
+  const retryGrade = async () => {
+    if (!record || !reading || !store.brain) return
+    setRegrading(true)
+    const grade = await store.brain.grade(record.answers, reading.docs, record.work).catch(() => null)
+    const next = grade ?? record.grade
+    const score = grade && !grade.checkFailed ? grade.score : record.score
+    if (next) updateExamGrade(record.id, next, score)
+    setRecord({ ...record, grade: next, score })
+    setRegrading(false)
+  }
+
   const reset = () => {
     setFile(null)
     setWork('')
@@ -142,26 +156,40 @@ export function RunExam({ store }: { store: ProbeStore }) {
           <h1 className="pa-h1">{record.student.name}</h1>
           <p className="pa-lede">{record.student.indexNumber} · {reading?.week}</p>
         </div>
-        <div className="pa-card pa-stack pa-gap-10">
-          <span className="pa-body" style={{ fontWeight: 600 }}>{boundaryLine(boundary)}</span>
+        <div className="pa-card pa-stack pa-gap-10" style={boundary.checkFailed ? { borderColor: 'var(--pa-bad)' } : undefined}>
+          <span className="pa-body" style={{ fontWeight: 600, color: boundary.checkFailed ? 'var(--pa-bad)' : undefined }}>
+            {boundaryLine(boundary)}
+          </span>
           {boundary.held.length > 0 && <span className="pa-meta">Held: {boundary.held.slice(0, 4).join(' · ')}</span>}
           {boundary.unsupported.length > 0 && <span className="pa-meta">Not borne out: {boundary.unsupported.slice(0, 4).join(' · ')}</span>}
           {boundary.wrong.length > 0 && <span className="pa-meta">Contradicted: {boundary.wrong.slice(0, 4).join(' · ')}</span>}
+          {boundary.checkFailed && (
+            <button className="pa-btn" style={{ alignSelf: 'flex-start' }} disabled={regrading} onClick={() => void retryGrade()}>
+              {regrading ? 'Re-grading…' : 'Retry grading'}
+            </button>
+          )}
         </div>
-        <div className="pa-row pa-gap-10">
-          <button
-            className="pa-btn"
-            onClick={() => {
-              downloadReport(`${record.student.indexNumber}-${record.student.name.replace(/\s+/g, '-')}.txt`, text)
-              setDownloaded(true)
-            }}
-          >
-            Download report
-          </button>
-          <button className="pa-btn quiet" onClick={reset}>
+        {!boundary.checkFailed && (
+          <div className="pa-row pa-gap-10">
+            <button
+              className="pa-btn"
+              onClick={() => {
+                downloadReport(`${record.student.indexNumber}-${record.student.name.replace(/\s+/g, '-')}.txt`, text)
+                setDownloaded(true)
+              }}
+            >
+              Download report
+            </button>
+            <button className="pa-btn quiet" onClick={reset}>
+              Run another exam
+            </button>
+          </div>
+        )}
+        {boundary.checkFailed && (
+          <button className="pa-btn quiet" style={{ alignSelf: 'flex-start' }} onClick={reset}>
             Run another exam
           </button>
-        </div>
+        )}
         {downloaded && <span className="pa-meta">Downloaded. Distribute it however this course does.</span>}
       </div>
     )

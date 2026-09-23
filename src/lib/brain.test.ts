@@ -200,6 +200,65 @@ describe('grade — across several readings', () => {
     )
     expect(grade?.claims[0].support).toBe('supported')
   })
+
+  it('retries a dropped checker call once before giving up', async () => {
+    let extractCall = true
+    let checkerCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        if (extractCall) {
+          extractCall = false
+          return {
+            ok: true,
+            text: async () =>
+              JSON.stringify({ choices: [{ message: { content: JSON.stringify({ claims: ['a claim about Mill'] }) } }] }),
+          }
+        }
+        checkerCalls += 1
+        if (checkerCalls === 1) return { ok: false, text: async () => 'rate limited' }
+        return {
+          ok: true,
+          text: async () =>
+            JSON.stringify({ choices: [{ message: { content: JSON.stringify({ verdicts: ['supported'] }) } }] }),
+        }
+      }),
+    )
+    const brain = makeBrain(CONFIG)!
+    const grade = await brain.grade(
+      [{ question: 'q', concept: '', spoken: 'a', coverage: 0, probed: false, judgedBy: 'model' }],
+      [MILL],
+      '',
+    )
+    expect(checkerCalls).toBe(2)
+    expect(grade?.checkFailed).toBe(false)
+    expect(grade?.claims[0].support).toBe('supported')
+  })
+
+  it('flags checkFailed rather than silently marking every claim absent when both checker calls drop', async () => {
+    let extractCall = true
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        if (extractCall) {
+          extractCall = false
+          return {
+            ok: true,
+            text: async () =>
+              JSON.stringify({ choices: [{ message: { content: JSON.stringify({ claims: ['a claim about Mill'] }) } }] }),
+          }
+        }
+        return { ok: false, text: async () => 'rate limited' }
+      }),
+    )
+    const brain = makeBrain(CONFIG)!
+    const grade = await brain.grade(
+      [{ question: 'q', concept: '', spoken: 'a', coverage: 0, probed: false, judgedBy: 'model' }],
+      [MILL],
+      '',
+    )
+    expect(grade?.checkFailed).toBe(true)
+  })
 })
 
 const PATH: QuestionPath = {

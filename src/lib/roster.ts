@@ -98,6 +98,15 @@ export function saveExam(record: ExamRecord): void {
   writeJson(EXAMS_KEY, [...loadExams(), record])
 }
 
+/** Re-grades an existing record in place — for when the checker call failed and the
+ *  transcript is still there to check again, without re-running the exam itself. */
+export function updateExamGrade(id: string, grade: Grade, score: number | null): void {
+  writeJson(
+    EXAMS_KEY,
+    loadExams().map((e) => (e.id === id ? { ...e, grade, score } : e)),
+  )
+}
+
 export const examsFor = (indexNumber: string): ExamRecord[] =>
   loadExams()
     .filter((e) => e.student.indexNumber === indexNumber)

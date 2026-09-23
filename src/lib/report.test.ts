@@ -15,7 +15,7 @@ const claim = (text: string, support: Claim['support'], passage = 0, recycled = 
   passage,
 })
 
-const grade = (claims: Claim[]): Grade => ({ claims, precision: 0, fresh: 0, score: 0 })
+const grade = (claims: Claim[]): Grade => ({ claims, precision: 0, fresh: 0, score: 0, checkFailed: false })
 
 const READING: SourceDoc = { name: 'The Reading', text: Array.from({ length: 400 }, (_, i) => `word${i}`).join(' ') }
 const DOCS = [READING]
@@ -48,11 +48,33 @@ describe('boundaryOf', () => {
     expect(boundaryOf(null).held).toEqual([])
     expect(boundaryOf(grade([])).unsupported).toEqual([])
   })
+
+  it('reports checkFailed rather than a real boundary when the checker itself failed', () => {
+    const failed: Grade = {
+      claims: [claim('a', 'absent', 1), claim('b', 'absent', 2)],
+      precision: 0,
+      fresh: 0,
+      score: 0,
+      checkFailed: true,
+    }
+    const b = boundaryOf(failed)
+    expect(b.checkFailed).toBe(true)
+    // A failed check must never present as "checked and found unsupported."
+    expect(b.held).toEqual([])
+    expect(b.unsupported).toEqual([])
+  })
 })
 
 describe('boundaryLine', () => {
   it('says plainly when nothing checkable was said', () => {
     expect(boundaryLine(boundaryOf(null))).toMatch(/could be checked either way/)
+  })
+
+  it('says the check failed, not that the student held nothing, when checkFailed is set', () => {
+    const failed: Grade = { claims: [claim('a', 'absent', 1)], precision: 0, fresh: 0, score: 0, checkFailed: true }
+    const line = boundaryLine(boundaryOf(failed))
+    expect(line).toMatch(/check failed/)
+    expect(line).not.toMatch(/held nothing/)
   })
 
   it('leads with what they held', () => {

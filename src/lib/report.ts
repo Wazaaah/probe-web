@@ -32,11 +32,16 @@ export interface Boundary {
   restated: string[]
   /** Which passages of the source they showed any command of. */
   passages: number[]
+  /** The checker itself failed — everything above defaulted to unsupported for that
+   *  reason, not because it was actually checked and found wanting. This is not a real
+   *  result; re-grade before reading anything else on this boundary as fact. */
+  checkFailed: boolean
 }
 
 export function boundaryOf(grade: Grade | null): Boundary {
-  const empty: Boundary = { held: [], unsupported: [], wrong: [], restated: [], passages: [] }
-  if (!grade?.claims?.length) return empty
+  const empty: Boundary = { held: [], unsupported: [], wrong: [], restated: [], passages: [], checkFailed: false }
+  if (!grade?.claims?.length) return { ...empty, checkFailed: grade?.checkFailed ?? false }
+  if (grade.checkFailed) return { ...empty, checkFailed: true }
 
   const held: string[] = []
   const unsupported: string[] = []
@@ -53,7 +58,7 @@ export function boundaryOf(grade: Grade | null): Boundary {
       if (claim.passage >= 0) passages.add(claim.passage)
     }
   }
-  return { held, unsupported, wrong, restated, passages: [...passages].sort((a, b) => a - b) }
+  return { held, unsupported, wrong, restated, passages: [...passages].sort((a, b) => a - b), checkFailed: false }
 }
 
 /**
@@ -65,6 +70,9 @@ export function boundaryOf(grade: Grade | null): Boundary {
  * and this is not the instrument for those.
  */
 export function boundaryLine(b: Boundary): string {
+  if (b.checkFailed) {
+    return 'The claim check failed for this session — this is not a real result. Re-grade before trusting anything below.'
+  }
   if (!b.held.length && !b.unsupported.length && !b.wrong.length && !b.restated.length) {
     return 'Nothing was said about the source that could be checked either way.'
   }
