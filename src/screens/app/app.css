@@ -1,0 +1,320 @@
+/*
+ * The real app's design system — Ashesi's own palette, sampled directly from pixels in
+ * the university's BambooHR instance, not guessed at. Scoped under .pa (Probe Admin) so
+ * none of it leaks into the trial or the paired demo, which keep their own monochrome
+ * phone-frame system untouched.
+ *
+ * This is a desktop product: a sidebar and a content pane, full width. Not a phone frame
+ * centred on a wide screen.
+ */
+
+.pa {
+  --pa-accent: #832816;
+  --pa-accent-deep: #641f10;
+  --pa-tint: #ae7368;
+  --pa-tint-pale: #f1e2df;
+  --pa-bg: #f5f4f1;
+  --pa-surface: #ffffff;
+  --pa-border: #e4e3e0;
+  --pa-ink: #38312f;
+  --pa-ink-dim: #676260;
+  --pa-ink-faint: #9c9997;
+  --pa-good: #2f6b46;
+  --pa-warn: #a6650f;
+  --pa-bad: #832816;
+  --pa-radius: 10px;
+  --pa-radius-lg: 14px;
+  --pa-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --pa-serif: 'Lora', Georgia, 'Times New Roman', serif;
+
+  width: 100%;
+  min-height: 100dvh;
+  background: var(--pa-bg);
+  color: var(--pa-ink);
+  font-family: var(--pa-sans);
+  display: flex;
+  color-scheme: light;
+}
+
+.pa * { box-sizing: border-box; }
+.pa button { font: inherit; color: inherit; }
+.pa input, .pa textarea, .pa select { font: inherit; color: inherit; }
+.pa input[type="range"] { accent-color: var(--pa-accent); }
+.pa input[type="checkbox"], .pa input[type="radio"] { accent-color: var(--pa-accent); }
+.pa :focus-visible { outline: 2px solid var(--pa-accent); outline-offset: 2px; border-radius: 4px; }
+
+.pa h1, .pa h2, .pa h3, .pa .pa-serif { font-family: var(--pa-serif); font-weight: 600; margin: 0; text-wrap: balance; }
+
+/* -- Shell: sidebar + content, real desktop layout ------------------------ */
+
+.pa-shell { display: flex; width: 100%; min-height: 100dvh; }
+
+.pa-sidebar {
+  flex: none;
+  width: 248px;
+  background: var(--pa-surface);
+  border-right: 1px solid var(--pa-border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 14px;
+  gap: 24px;
+  transition: width 0.15s var(--pa-ease, ease);
+}
+.pa-sidebar.collapsed { width: 72px; padding-left: 12px; padding-right: 12px; align-items: center; }
+
+.pa-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+.pa-sidebar.collapsed .pa-brand { padding: 0; justify-content: center; }
+/* Standing in for the Ashesi crest until the real file is supplied — this is the one
+   place the institution's mark lives, directly against "Probe", not split off elsewhere. */
+/* Every one of these is prefixed pa- deliberately — a bare .mark collided with the
+   global stylesheet's own .mark (the splash screen's logo, margin: 0 auto) and silently
+   picked up its centering margin, which is what pushed this away from the sidebar's icons
+   below it. Unprefixed classes in this file are a real hazard, not just a style nit. */
+.pa-brand .pa-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #16130f;
+  display: grid;
+  place-items: center;
+  flex: none;
+  margin: 0;
+}
+.pa-brand .pa-mark .pa-ring { width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid #fff; }
+.pa-brand .pa-name { font-family: var(--pa-sans); font-size: 15px; line-height: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.pa-brand .pa-who { font-size: 12px; line-height: 15px; color: var(--pa-ink-faint); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.pa-sidebar.collapsed .pa-brand .pa-name,
+.pa-sidebar.collapsed .pa-brand .pa-who { display: none; }
+
+.pa-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--pa-ink-faint);
+  cursor: pointer;
+  margin-top: auto;
+}
+.pa-collapse-toggle:hover { background: var(--pa-bg); color: var(--pa-ink-dim); }
+.pa-sidebar.collapsed .pa-collapse-toggle { width: 100%; }
+
+.pa-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; overflow-y: auto; }
+.pa-sidebar.collapsed .pa-nav { align-items: center; width: 100%; }
+.pa-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.pa-sidebar.collapsed .pa-nav-group { align-items: center; width: 100%; }
+.pa-nav-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pa-ink-faint);
+  padding: 14px 10px 4px;
+}
+.pa-sidebar.collapsed .pa-nav-label { display: none; }
+.pa-sidebar.collapsed .pa-nav-item { width: 44px; justify-content: center; padding: 10px; }
+.pa-sidebar.collapsed .pa-nav-item .pa-nav-text { display: none; }
+
+.pa-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--pa-ink-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s var(--pa-ease, ease), color 0.12s;
+}
+.pa-nav-item:hover { background: var(--pa-bg); color: var(--pa-ink); }
+.pa-nav-item.active { background: var(--pa-tint-pale); color: var(--pa-accent); font-weight: 600; }
+
+.pa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Just a hairline under whichever screen is showing — not a second place for branding.
+   The Ashesi mark and "Probe" live together, once, in the sidebar (see .pa-brand). */
+.pa-topbar {
+  flex: none;
+  height: 64px;
+  border-bottom: 1px solid var(--pa-border);
+  background: var(--pa-surface);
+}
+.pa-content { flex: 1; min-width: 0; overflow-y: auto; padding: 32px 40px; }
+/* A real desktop pane, not a narrow column marooned in the middle of the window — this
+   only caps out on a genuinely huge monitor, where an unbounded line length would just
+   read badly, not on an ordinary laptop or external display. */
+.pa-content-inner { max-width: 1600px; display: flex; flex-direction: column; gap: 24px; }
+
+@media (max-width: 860px) {
+  .pa-shell { flex-direction: column; }
+  .pa-sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--pa-border); }
+  .pa-nav { flex-direction: row; }
+  .pa-nav-group { flex-direction: row; }
+  .pa-nav-label { display: none; }
+  .pa-content { padding: 20px; }
+}
+
+/* -- Type ------------------------------------------------------------------ */
+
+.pa-h1 { font-size: 28px; line-height: 36px; }
+.pa-h2 { font-size: 20px; line-height: 28px; }
+.pa-h3 { font-size: 16px; line-height: 22px; }
+.pa-lede { font-size: 15px; line-height: 23px; color: var(--pa-ink-dim); margin: 0; max-width: 62ch; }
+.pa-body { font-size: 15px; line-height: 23px; margin: 0; }
+.pa-meta { font-size: 13px; line-height: 19px; color: var(--pa-ink-dim); margin: 0; }
+.pa-micro { font-size: 12px; line-height: 16px; color: var(--pa-ink-faint); margin: 0; }
+.pa-dim { color: var(--pa-ink-dim); }
+
+/* -- Building blocks --------------------------------------------------------- */
+
+.pa-row { display: flex; align-items: center; gap: 10px; }
+.pa-stack { display: flex; flex-direction: column; }
+.pa-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pa-grow { flex: 1; min-width: 0; }
+.pa-wrap { flex-wrap: wrap; }
+.pa-gap-4 { gap: 4px; } .pa-gap-6 { gap: 6px; } .pa-gap-8 { gap: 8px; }
+.pa-gap-12 { gap: 12px; } .pa-gap-16 { gap: 16px; } .pa-gap-20 { gap: 20px; }
+
+.pa-card {
+  background: var(--pa-surface);
+  border: 1px solid var(--pa-border);
+  border-radius: var(--pa-radius-lg);
+  padding: 20px;
+}
+
+.pa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+
+.pa-list { display: flex; flex-direction: column; }
+.pa-list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--pa-border);
+}
+.pa-list-row:last-child { border-bottom: 0; }
+.pa-list-row.link { cursor: pointer; }
+.pa-list-row.link:hover { background: var(--pa-bg); margin: 0 -12px; padding-left: 16px; padding-right: 16px; border-radius: 8px; }
+
+.pa-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--pa-tint-pale);
+  color: var(--pa-accent);
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  font-size: 14px;
+  flex: none;
+}
+
+.pa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--pa-bg);
+  color: var(--pa-ink-dim);
+  border: 1px solid var(--pa-border);
+  flex: none;
+}
+.pa-chip.accent { background: var(--pa-tint-pale); color: var(--pa-accent); border-color: transparent; }
+.pa-chip.good { background: #e7f0ea; color: var(--pa-good); border-color: transparent; }
+.pa-chip.warn { background: #f6ecdd; color: var(--pa-warn); border-color: transparent; }
+.pa-chip.bad { background: #f3e3df; color: var(--pa-bad); border-color: transparent; }
+
+.pa-icon-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--pa-tint-pale);
+  color: var(--pa-accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.pa-rule { height: 1px; background: var(--pa-border); border: 0; margin: 0; }
+
+.pa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--pa-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pa-btn:hover { background: var(--pa-accent-deep); }
+.pa-btn:disabled { opacity: 0.5; cursor: default; }
+.pa-btn.quiet { background: transparent; color: var(--pa-ink); border-color: var(--pa-border); }
+.pa-btn.quiet:hover { background: var(--pa-bg); }
+.pa-btn.ghost { background: transparent; color: var(--pa-accent); padding-left: 4px; padding-right: 4px; }
+.pa-btn.ghost:hover { background: transparent; text-decoration: underline; }
+.pa-btn.danger { background: transparent; color: var(--pa-bad); border-color: var(--pa-border); }
+.pa-btn.danger:hover { background: #f3e3df; }
+
+.pa-field {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--pa-border);
+  background: var(--pa-surface);
+  font-size: 14px;
+}
+.pa-field:focus { border-color: var(--pa-accent); }
+
+.pa-link { color: var(--pa-accent); text-decoration: none; font-weight: 500; }
+.pa-link:hover { text-decoration: underline; }
+
+.pa-dashed {
+  border: 1.5px dashed var(--pa-border);
+  border-radius: var(--pa-radius-lg);
+  background: transparent;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+}
+.pa-dashed:hover { border-color: var(--pa-tint); background: var(--pa-tint-pale); }
+
+.pa-track { position: relative; height: 6px; border-radius: 999px; background: var(--pa-border); overflow: hidden; }
+.pa-track > span { position: absolute; inset: 0; background: var(--pa-accent); border-radius: inherit; transition: width 0.2s var(--pa-ease, ease); }
+
+.pa-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f3e3df;
+  color: var(--pa-bad);
+  font-size: 13px;
+}
+
+.pa-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--pa-ink-dim);
+  border: 1.5px dashed var(--pa-border);
+  border-radius: var(--pa-radius-lg);
+}

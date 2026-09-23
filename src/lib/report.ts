@@ -77,6 +77,36 @@ export function boundaryLine(b: Boundary): string {
   return `${parts.join(', ')}.`
 }
 
+/**
+ * One student's boundary, as plain text a lecturer can download and hand off — to Canvas,
+ * to the student, wherever. This is the shape the production app actually ships: never a
+ * score, never a raw transcript by default, just where understanding stopped.
+ */
+export function studentReportText(name: string, indexNumber: string, week: string, b: Boundary): string {
+  const lines = [`${name} (${indexNumber})`, week, '', boundaryLine(b), '']
+
+  if (b.held.length) {
+    lines.push('HELD — the reading bears these out')
+    for (const c of b.held) lines.push(`  - ${c}`)
+    lines.push('')
+  }
+  if (b.unsupported.length) {
+    lines.push('NOT BORNE OUT — the reading does not support these')
+    for (const c of b.unsupported) lines.push(`  - ${c}`)
+    lines.push('')
+  }
+  if (b.wrong.length) {
+    lines.push('CONTRADICTED — the reading says otherwise')
+    for (const c of b.wrong) lines.push(`  - ${c}`)
+    lines.push('')
+  }
+  if (b.restated.length) {
+    lines.push('RESTATED — supported, but lifted from their own write-up rather than shown fresh')
+    for (const c of b.restated) lines.push(`  - ${c}`)
+  }
+  return lines.join('\n').trim()
+}
+
 /* -- across a class ------------------------------------------------------- */
 
 export interface TopicPattern {

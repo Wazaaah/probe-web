@@ -5,6 +5,7 @@ import { Reviewer } from './screens/reviewer/Reviewer'
 import { Trial } from './screens/Trial'
 import { Review } from './screens/Review'
 import { TrialApp } from './screens/TrialApp'
+import { ProbeApp } from './screens/app/ProbeApp'
 import { useProbe } from './lib/store'
 
 /**
@@ -60,6 +61,10 @@ export function App() {
 
   if (hash === '#trial') {
     return <Trial onLeave={() => go('')} onReview={() => go('#review')} />
+  }
+
+  if (hash === '#app') {
+    return <ProbeApp store={store} />
   }
 
   return (
